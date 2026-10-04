@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Integrated Environmental Monitoring Platform</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <i class="fa-solid fa-leaf brand-icon"></i>
+        <div>
+          <h1>Integrated Environmental Monitoring</h1>
+          <p class="subtitle">IoT ESP32 Indoor Sensing & Outdoor Weather Integration</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <span id="connection-status" class="status-badge connected">
+          <i class="fa-solid fa-circle"></i> System Live
+        </span>
+        <a href="/docs" target="_blank" class="btn-api">
+          <i class="fa-solid fa-code"></i> API Docs
+        </a>
+      </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="dashboard-grid">
+      <!-- Top Metrics Overview -->
+      <section class="cards-row">
+        <!-- Indoor Card -->
+        <div class="card card-indoor">
+          <div class="card-header">
+            <span class="card-tag tag-indoor"><i class="fa-solid fa-house-chimney"></i> Indoor IoT Node</span>
+            <span id="indoor-device-id" class="device-label">esp32_room_node</span>
+          </div>
+          <div class="metrics-split">
+            <div class="metric-item">
+              <span class="metric-icon temp-icon"><i class="fa-solid fa-temperature-half"></i></span>
+              <div>
+                <span class="metric-label">Temperature</span>
+                <div class="metric-value"><span id="indoor-temp">--</span> <small>°C</small></div>
+              </div>
+            </div>
+            <div class="metric-item">
+              <span class="metric-icon hum-icon"><i class="fa-solid fa-droplet"></i></span>
+              <div>
+                <span class="metric-label">Humidity</span>
+                <div class="metric-value"><span id="indoor-hum">--</span> <small>%</small></div>
+              </div>
+            </div>
+          </div>
+          <div class="card-footer">
+            <i class="fa-regular fa-clock"></i> Updated: <span id="indoor-last-time">Waiting for data...</span>
+          </div>
+        </div>
+
+        <!-- Outdoor Card -->
+        <div class="card card-outdoor">
+          <div class="card-header">
+            <span class="card-tag tag-outdoor"><i class="fa-solid fa-cloud-sun"></i> Outdoor Weather API</span>
+            <span id="outdoor-city" class="device-label">Bengaluru, IN</span>
+          </div>
+          <div class="metrics-split">
+            <div class="metric-item">
+              <span class="metric-icon temp-icon"><i class="fa-solid fa-temperature-arrow-up"></i></span>
+              <div>
+                <span class="metric-label">Temperature</span>
+                <div class="metric-value"><span id="outdoor-temp">--</span> <small>°C</small></div>
+              </div>
+            </div>
+            <div class="metric-item">
+              <span class="metric-icon hum-icon"><i class="fa-solid fa-water"></i></span>
+              <div>
+                <span class="metric-label">Humidity</span>
+                <div class="metric-value"><span id="outdoor-hum">--</span> <small>%</small></div>
+              </div>
+            </div>
+          </div>
+          <div class="weather-meta">
+            <span><i class="fa-solid fa-wind"></i> Wind: <b id="outdoor-wind">-- km/h</b></span>
+            <span><i class="fa-solid fa-cloud"></i> Condition: <b id="outdoor-condition">--</b></span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Indoor vs Outdoor Comparison Bar -->
+      <section class="card comparison-card">
+        <div class="card-header">
+          <h3><i class="fa-solid fa-scale-balanced"></i> Environmental Comparison & Thermal Comfort</h3>
+          <button id="btn-sync-weather" class="btn-refresh" title="Sync Outdoor API">
+            <i class="fa-solid fa-rotate"></i> Sync Weather
+          </button>
+        </div>
+        <div class="comparison-details">
+          <div class="comp-box">
+            <span class="comp-label">Temperature Difference (ΔT)</span>
+            <div class="comp-value" id="comp-temp-diff">--</div>
+            <span class="comp-sub">Indoor − Outdoor</span>
+          </div>
+          <div class="comp-box">
+            <span class="comp-label">Humidity Difference (ΔH)</span>
+            <div class="comp-value" id="comp-hum-diff">--</div>
+            <span class="comp-sub">Indoor − Outdoor</span>
+          </div>
+          <div class="comp-box">
+            <span class="comp-label">Indoor Heat Index</span>
+            <div class="comp-value" id="comp-indoor-hi">--</div>
+            <span class="comp-sub">Apparent Temp</span>
+          </div>
+          <div class="comp-box">
+            <span class="comp-label">Comfort Evaluation</span>
+            <div class="comp-status" id="comp-status">Evaluating...</div>
+            <span class="comp-sub" id="comp-summary">Synchronizing readings</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Historical Graphs & Alert Panel -->
+      <section class="split-row">
+        <!-- Historical Chart -->
+        <div class="card chart-container-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-chart-line"></i> Historical Environmental Trends</h3>
+            <div class="chart-controls">
+              <button class="pill active" data-chart="temp">Temperature</button>
+              <button class="pill" data-chart="hum">Humidity</button>
+            </div>
+          </div>
+          <div class="chart-wrapper">
+            <canvas id="trendsChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Alert & Threshold Panel -->
+        <div class="card alerts-container-card">
+          <div class="card-header">
+            <h3><i class="fa-solid fa-triangle-exclamation"></i> Alerts & Thresholds</h3>
+            <span id="alert-count-badge" class="badge-count">0 Active</span>
+          </div>
+          <div id="alerts-list" class="alerts-list">
+            <div class="empty-state">
+              <i class="fa-regular fa-circle-check"></i>
+              <p>No active environmental alerts. All readings within safe thresholds.</p>
+            </div>
+          </div>
+          <!-- Threshold settings form -->
+          <div class="thresholds-footer">
+            <h4><i class="fa-solid fa-sliders"></i> Active Threshold Boundaries</h4>
+            <div class="threshold-inputs">
+              <label>Temp Safe Range: 
+                <input type="number" id="thresh-temp-min" value="18" style="width:50px">°C to 
+                <input type="number" id="thresh-temp-max" value="32" style="width:50px">°C
+              </label>
+              <button id="btn-save-thresholds" class="btn-sm">Save</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+      <p>Integrated Environmental Monitoring Platform | MCA Project Proposal Implementation</p>
+    </footer>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

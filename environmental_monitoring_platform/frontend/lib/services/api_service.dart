@@ -1,6 +1,4 @@
 import 'dart:convert';
-import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:http/http.dart' as http;
 import '../models/indoor_reading.dart';
 import '../models/outdoor_reading.dart';
@@ -133,6 +131,68 @@ class ApiService {
       return res.statusCode == 200;
     } catch (e) {
       print('[ApiService] updateThreshold error: $e');
+      return false;
+    }
+  }
+
+  // 9. User Login
+  static Future<Map<String, dynamic>?> login(String username, String password) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/auth/login'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      print('[ApiService] login error: $e');
+      return null;
+    }
+  }
+
+  // 10. User Register
+  static Future<bool> register(String username, String password) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/auth/register'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'username': username, 'password': password}),
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      print('[ApiService] register error: $e');
+      return false;
+    }
+  }
+
+  // 11. Cloud Backup Export
+  static Future<Map<String, dynamic>?> createBackup() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/sync/backup'));
+      if (res.statusCode == 200) {
+        return jsonDecode(res.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (e) {
+      print('[ApiService] createBackup error: $e');
+      return null;
+    }
+  }
+
+  // 12. Cloud Backup Restore
+  static Future<bool> restoreBackup(Map<String, dynamic> data) async {
+    try {
+      final res = await http.post(
+        Uri.parse('$baseUrl/api/sync/restore'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(data),
+      );
+      return res.statusCode == 200;
+    } catch (e) {
+      print('[ApiService] restoreBackup error: $e');
       return false;
     }
   }

@@ -70,7 +70,14 @@ def get_latest_outdoor_reading() -> Optional[Dict[str, Any]]:
         SELECT * FROM outdoor_readings ORDER BY id DESC LIMIT 1
     """)
     row = cur.fetchone()
-    return dict(row) if row else None
+    if not row:
+        return None
+    data = dict(row)
+    data["is_cached"] = "(Cached)" in data.get("weather_desc", "")
+    cur_c = conn.execute("SELECT cached_at FROM outdoor_forecast_cache ORDER BY id DESC LIMIT 1")
+    row_c = cur_c.fetchone()
+    data["cached_at"] = row_c["cached_at"] if row_c else data.get("timestamp")
+    return data
 
 
 # ==========================================
@@ -162,21 +169,41 @@ def get_combined_history(limit: int = 50) -> List[Dict[str, Any]]:
     cur_out = conn.execute("""
         SELECT timestamp, temperature, humidity FROM outdoor_readings
         ORDER BY id DESC LIMIT ?
-    """, (limit,))
+    """, (limit * 2,))
     outdoor_rows = list(reversed(cur_out.fetchall()))
 
-    # Pair them or provide merged list
+    # Fetch 24h cached forecast as fallback for outdoor diurnal curve
+    cur_f = conn.execute("""
+        SELECT hour_timestamp as timestamp, temperature, humidity FROM outdoor_forecast_cache
+        ORDER BY hour_timestamp ASC LIMIT 24
+    """)
+    forecast_rows = cur_f.fetchall()
+
     points = []
-    # If we have indoor points, build around them
     if indoor_rows:
-        latest_out = outdoor_rows[-1] if outdoor_rows else None
         for r in indoor_rows:
+            in_ts = r["timestamp"]
+            # Find closest outdoor reading by timestamp prefix (YYYY-MM-DDTHH)
+            matched_out = None
+            in_hour = in_ts[:13] if len(in_ts) >= 13 else in_ts
+            for o in outdoor_rows:
+                if o["timestamp"].startswith(in_hour):
+                    matched_out = o
+                    break
+            if not matched_out and forecast_rows:
+                for f in forecast_rows:
+                    if f["timestamp"].startswith(in_hour):
+                        matched_out = f
+                        break
+            if not matched_out and outdoor_rows:
+                matched_out = outdoor_rows[-1]
+
             points.append({
-                "timestamp": r["timestamp"],
+                "timestamp": in_ts,
                 "indoor_temperature": r["temperature"],
                 "indoor_humidity": r["humidity"],
-                "outdoor_temperature": latest_out["temperature"] if latest_out else None,
-                "outdoor_humidity": latest_out["humidity"] if latest_out else None
+                "outdoor_temperature": matched_out["temperature"] if matched_out else None,
+                "outdoor_humidity": matched_out["humidity"] if matched_out else None
             })
     elif outdoor_rows:
         for r in outdoor_rows:
@@ -187,5 +214,182 @@ def get_combined_history(limit: int = 50) -> List[Dict[str, Any]]:
                 "outdoor_temperature": r["temperature"],
                 "outdoor_humidity": r["humidity"]
             })
+    elif forecast_rows:
+        for f in forecast_rows:
+            points.append({
+                "timestamp": f["timestamp"],
+                "indoor_temperature": None,
+                "indoor_humidity": None,
+                "outdoor_temperature": f["temperature"],
+                "outdoor_humidity": f["humidity"]
+            })
 
     return points
+
+
+# ==========================================
+# Outdoor 24-Hour Forecast Cache
+# ==========================================
+def upsert_forecast_cache(
+    city: str,
+    hour_timestamp: str,
+    temperature: float,
+    humidity: float,
+    weather_code: int,
+    weather_desc: str,
+    cached_at: str
+) -> bool:
+    """Store or update hourly forecast in SQLite cache."""
+    conn = get_connection()
+    with conn:
+        cur = conn.execute("""
+            INSERT INTO outdoor_forecast_cache (
+                city, hour_timestamp, temperature, humidity,
+                weather_code, weather_desc, cached_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(city, hour_timestamp) DO UPDATE SET
+                temperature = excluded.temperature,
+                humidity = excluded.humidity,
+                weather_code = excluded.weather_code,
+                weather_desc = excluded.weather_desc,
+                cached_at = excluded.cached_at
+        """, (city, hour_timestamp, round(temperature, 1), round(humidity, 1),
+              weather_code, weather_desc, cached_at))
+        return cur.rowcount > 0
+
+
+def get_cached_forecast_for_time(city: str, target_iso: Optional[str] = None) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve the closest forecast reading for the given hour timestamp.
+    Defaults to current UTC hour.
+    """
+    conn = get_connection()
+    if not target_iso:
+        target_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:00")
+    else:
+        # Normalize to hour format: YYYY-MM-DDTHH:00
+        target_iso = target_iso[:13] + ":00"
+
+    # Exact match first
+    cur = conn.execute("""
+        SELECT * FROM outdoor_forecast_cache
+        WHERE city = ? AND hour_timestamp LIKE ?
+        LIMIT 1
+    """, (city, f"{target_iso}%"))
+    row = cur.fetchone()
+    if row:
+        return dict(row)
+
+    # Fallback to the latest cached entry for this city
+    cur2 = conn.execute("""
+        SELECT * FROM outdoor_forecast_cache
+        WHERE city = ?
+        ORDER BY hour_timestamp DESC
+        LIMIT 1
+    """, (city,))
+    row2 = cur2.fetchone()
+    return dict(row2) if row2 else None
+
+
+def get_24h_cached_forecast(city: str) -> List[Dict[str, Any]]:
+    """Retrieve up to 24 cached hourly forecast points for diurnal comparison."""
+    conn = get_connection()
+    cur = conn.execute("""
+        SELECT * FROM outdoor_forecast_cache
+        WHERE city = ?
+        ORDER BY hour_timestamp ASC
+        LIMIT 24
+    """, (city,))
+    rows = cur.fetchall()
+    return [dict(r) for r in rows]
+
+
+# ==========================================
+# User Authentication & Management
+# ==========================================
+def get_user_by_username(username: str) -> Optional[Dict[str, Any]]:
+    conn = get_connection()
+    cur = conn.execute("SELECT * FROM users WHERE username = ?", (username,))
+    row = cur.fetchone()
+    return dict(row) if row else None
+
+
+def create_user(username: str, password_hash: str, role: str = "viewer") -> bool:
+    conn = get_connection()
+    now_str = datetime.now(timezone.utc).isoformat()
+    try:
+        with conn:
+            cur = conn.execute("""
+                INSERT INTO users (username, password_hash, role, created_at)
+                VALUES (?, ?, ?, ?)
+            """, (username, password_hash, role, now_str))
+            return cur.rowcount > 0
+    except Exception:
+        return False
+
+
+# ==========================================
+# Cloud Backup & Restore
+# ==========================================
+def export_database_backup() -> Dict[str, Any]:
+    """Export complete snapshot of readings, thresholds, and alerts."""
+    conn = get_connection()
+    indoor = [dict(r) for r in conn.execute("SELECT * FROM indoor_readings ORDER BY id ASC").fetchall()]
+    outdoor = [dict(r) for r in conn.execute("SELECT * FROM outdoor_readings ORDER BY id ASC").fetchall()]
+    alerts = [dict(r) for r in conn.execute("SELECT * FROM alert_logs ORDER BY id ASC").fetchall()]
+    thresholds = [dict(r) for r in conn.execute("SELECT * FROM threshold_configs").fetchall()]
+    return {
+        "version": "1.0",
+        "exported_at": datetime.now(timezone.utc).isoformat(),
+        "indoor_readings": indoor,
+        "outdoor_readings": outdoor,
+        "alert_logs": alerts,
+        "threshold_configs": thresholds
+    }
+
+
+def import_database_backup(backup_data: Dict[str, Any]) -> Dict[str, int]:
+    """Restore readings and configurations from backup payload."""
+    conn = get_connection()
+    restored = {"indoor": 0, "outdoor": 0, "thresholds": 0}
+    with conn:
+        for r in backup_data.get("indoor_readings", []):
+            try:
+                conn.execute("""
+                    INSERT INTO indoor_readings (device_id, temperature, humidity, timestamp)
+                    VALUES (?, ?, ?, ?)
+                """, (r["device_id"], r["temperature"], r["humidity"], r["timestamp"]))
+                restored["indoor"] += 1
+            except Exception:
+                pass
+
+        for r in backup_data.get("outdoor_readings", []):
+            try:
+                conn.execute("""
+                    INSERT INTO outdoor_readings (
+                        city, latitude, longitude, temperature, humidity,
+                        wind_speed, weather_code, weather_desc, timestamp
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (r["city"], r["latitude"], r["longitude"], r["temperature"],
+                      r["humidity"], r["wind_speed"], r["weather_code"],
+                      r["weather_desc"], r["timestamp"]))
+                restored["outdoor"] += 1
+            except Exception:
+                pass
+
+        for t in backup_data.get("threshold_configs", []):
+            try:
+                conn.execute("""
+                    INSERT INTO threshold_configs (parameter, min_value, max_value, is_enabled, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
+                    ON CONFLICT(parameter) DO UPDATE SET
+                        min_value = excluded.min_value,
+                        max_value = excluded.max_value,
+                        is_enabled = excluded.is_enabled,
+                        updated_at = excluded.updated_at
+                """, (t["parameter"], t["min_value"], t["max_value"], t["is_enabled"], t["updated_at"]))
+                restored["thresholds"] += 1
+            except Exception:
+                pass
+
+    return restored

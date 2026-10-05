@@ -9,6 +9,8 @@ class OutdoorReading {
   final int weatherCode;
   final String weatherDesc;
   final DateTime timestamp;
+  final bool isCached;
+  final DateTime? cachedAt;
 
   OutdoorReading({
     required this.id,
@@ -21,6 +23,8 @@ class OutdoorReading {
     required this.weatherCode,
     required this.weatherDesc,
     required this.timestamp,
+    this.isCached = false,
+    this.cachedAt,
   });
 
   factory OutdoorReading.fromJson(Map<String, dynamic> json) {
@@ -37,6 +41,10 @@ class OutdoorReading {
       timestamp: json['timestamp'] != null
           ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
           : DateTime.now(),
+      isCached: json['is_cached'] as bool? ?? false,
+      cachedAt: json['cached_at'] != null
+          ? DateTime.tryParse(json['cached_at'] as String)
+          : null,
     );
   }
 }

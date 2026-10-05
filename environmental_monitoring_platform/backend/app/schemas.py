@@ -43,7 +43,7 @@ class IndoorIngestResponse(BaseModel):
 # Outdoor Schemas
 # ==========================================
 class OutdoorReadingResponse(BaseModel):
-    id: int
+    id: Optional[int] = None
     city: str
     latitude: float
     longitude: float
@@ -53,6 +53,33 @@ class OutdoorReadingResponse(BaseModel):
     weather_code: int
     weather_desc: str
     timestamp: str
+    is_cached: bool = False
+    cached_at: Optional[str] = None
+
+
+# ==========================================
+# Auth & Cloud Backup Schemas
+# ==========================================
+class UserLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class UserLoginResponse(BaseModel):
+    success: bool
+    username: str
+    role: str
+    token: str
+    message: str
+
+
+class BackupPayload(BaseModel):
+    version: str = "1.0"
+    exported_at: str
+    indoor_readings: List[Dict[str, Any]] = []
+    outdoor_readings: List[Dict[str, Any]] = []
+    alert_logs: List[Dict[str, Any]] = []
+    threshold_configs: List[Dict[str, Any]] = []
 
 
 # ==========================================

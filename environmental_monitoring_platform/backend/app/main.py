@@ -9,7 +9,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from app.database import init_db
-from app.routers import indoor, outdoor, comparison, history, alerts
+from app.routers import indoor, outdoor, comparison, history, alerts, auth, sync
 from app.services.weather_service import fetch_open_meteo_weather
 from app.config import WEATHER_SYNC_INTERVAL_SEC, BASE_DIR
 
@@ -61,6 +61,8 @@ app.include_router(outdoor.router)
 app.include_router(comparison.router)
 app.include_router(history.router)
 app.include_router(alerts.router)
+app.include_router(auth.router)
+app.include_router(sync.router)
 
 
 # Health check

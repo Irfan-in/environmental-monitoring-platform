@@ -49,8 +49,13 @@ def run_builtin_server(host="0.0.0.0", port=8080):
         acknowledge_alert,
         get_thresholds,
         update_threshold,
-        get_combined_history
+        get_combined_history,
+        get_user_by_username,
+        create_user,
+        export_database_backup,
+        import_database_backup
     )
+    import hashlib
     from app.services.metrics import compute_heat_index, evaluate_comfort
 
     # Initialize SQLite database
@@ -198,6 +203,11 @@ def run_builtin_server(host="0.0.0.0", port=8080):
                 self._set_headers(200)
                 self.wfile.write(json.dumps(res).encode("utf-8"))
 
+            elif path == "/api/sync/backup":
+                backup = export_database_backup()
+                self._set_headers(200)
+                self.wfile.write(json.dumps(backup).encode("utf-8"))
+
             else:
                 self._set_headers(404)
                 self.wfile.write(json.dumps({"detail": "Endpoint not found"}).encode("utf-8"))
@@ -238,6 +248,43 @@ def run_builtin_server(host="0.0.0.0", port=8080):
                     return
                 self._set_headers(400)
                 self.wfile.write(json.dumps({"detail": "Invalid alert id"}).encode("utf-8"))
+
+            elif path == "/api/auth/login":
+                u = data.get("username", "")
+                p = data.get("password", "")
+                user = get_user_by_username(u)
+                if user and user["password_hash"] == hashlib.sha256(p.encode()).hexdigest():
+                    self._set_headers(200)
+                    self.wfile.write(json.dumps({
+                        "success": True,
+                        "username": user["username"],
+                        "role": user["role"],
+                        "token": f"token_{user['username']}_{user['role']}",
+                        "message": f"Welcome back, {user['username']}! Logged in as {user['role'].capitalize()}."
+                    }).encode("utf-8"))
+                else:
+                    self._set_headers(401)
+                    self.wfile.write(json.dumps({"detail": "Invalid credentials"}).encode("utf-8"))
+
+            elif path == "/api/auth/register":
+                u = data.get("username", "")
+                p = data.get("password", "")
+                if not u or not p:
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({"detail": "Username and password required"}).encode("utf-8"))
+                elif get_user_by_username(u):
+                    self._set_headers(400)
+                    self.wfile.write(json.dumps({"detail": "Username already exists"}).encode("utf-8"))
+                else:
+                    create_user(u, hashlib.sha256(p.encode()).hexdigest(), role="viewer")
+                    self._set_headers(200)
+                    self.wfile.write(json.dumps({"success": True, "message": "Registered successfully"}).encode("utf-8"))
+
+            elif path == "/api/sync/restore":
+                counts = import_database_backup(data)
+                self._set_headers(200)
+                self.wfile.write(json.dumps({"success": True, "message": "Restored successfully", "restored": counts}).encode("utf-8"))
+
             else:
                 self._set_headers(404)
                 self.wfile.write(json.dumps({"detail": "Endpoint not found"}).encode("utf-8"))

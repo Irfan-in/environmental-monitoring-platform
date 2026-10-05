@@ -19,6 +19,11 @@ class EnvironmentProvider with ChangeNotifier {
   String? _errorMessage;
   Timer? _pollingTimer;
 
+  // User Auth State (Guest by default, never forced)
+  String _username = 'Guest';
+  String _userRole = 'viewer'; // 'admin' or 'viewer'
+  bool _isLoggedIn = false;
+
   // Getters
   IndoorReading? get indoorReading => _indoorReading;
   OutdoorReading? get outdoorReading => _outdoorReading;
@@ -28,6 +33,11 @@ class EnvironmentProvider with ChangeNotifier {
   bool get isLoading => _isLoading;
   bool get isSyncingWeather => _isSyncingWeather;
   String? get errorMessage => _errorMessage;
+
+  String get username => _username;
+  String get userRole => _userRole;
+  bool get isLoggedIn => _isLoggedIn;
+  bool get isAdmin => _userRole == 'admin';
 
   int get unacknowledgedAlertCount =>
       _alerts.where((a) => !a.isAcknowledged).length;
@@ -105,6 +115,42 @@ class EnvironmentProvider with ChangeNotifier {
         notifyListeners();
       }
     }
+  }
+
+  Future<String?> login(String username, String password) async {
+    final res = await ApiService.login(username, password);
+    if (res != null && res['success'] == true) {
+      _username = res['username'] ?? username;
+      _userRole = res['role'] ?? 'viewer';
+      _isLoggedIn = true;
+      notifyListeners();
+      return null; // success, no error message
+    }
+    return 'Invalid username or password';
+  }
+
+  void logout() {
+    _username = 'Guest';
+    _userRole = 'viewer';
+    _isLoggedIn = false;
+    notifyListeners();
+  }
+
+  Future<bool> backupToCloud() async {
+    final data = await ApiService.createBackup();
+    return data != null;
+  }
+
+  Future<bool> restoreFromCloud() async {
+    final data = await ApiService.createBackup();
+    if (data != null) {
+      final success = await ApiService.restoreBackup(data);
+      if (success) {
+        await fetchData(silent: true);
+        return true;
+      }
+    }
+    return false;
   }
 
   @override

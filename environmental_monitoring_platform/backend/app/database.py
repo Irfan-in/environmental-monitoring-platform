@@ -53,6 +53,21 @@ def init_db():
         conn.execute("CREATE INDEX IF NOT EXISTS idx_outdoor_ts ON outdoor_readings(timestamp);")
 
         conn.execute("""
+            CREATE TABLE IF NOT EXISTS outdoor_forecast_cache (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                city TEXT NOT NULL,
+                hour_timestamp TEXT NOT NULL,
+                temperature REAL NOT NULL,
+                humidity REAL NOT NULL,
+                weather_code INTEGER NOT NULL,
+                weather_desc TEXT NOT NULL,
+                cached_at TEXT NOT NULL,
+                UNIQUE(city, hour_timestamp)
+            );
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_forecast_ts ON outdoor_forecast_cache(hour_timestamp);")
+
+        conn.execute("""
             CREATE TABLE IF NOT EXISTS alert_logs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 source TEXT NOT NULL,
@@ -88,3 +103,26 @@ def init_db():
                        ('humidity', ?, ?, 1, ?)
             """, (DEFAULT_TEMP_MIN, DEFAULT_TEMP_MAX, now_str,
                   DEFAULT_HUM_MIN, DEFAULT_HUM_MAX, now_str))
+
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'viewer',
+                created_at TEXT NOT NULL
+            );
+        """)
+
+        # Seed default users if empty (admin / admin123 and user / user123)
+        cur_users = conn.execute("SELECT COUNT(*) FROM users")
+        if cur_users.fetchone()[0] == 0:
+            import hashlib
+            now_str = datetime.now(timezone.utc).isoformat()
+            admin_hash = hashlib.sha256("admin123".encode()).hexdigest()
+            user_hash = hashlib.sha256("user123".encode()).hexdigest()
+            conn.execute("""
+                INSERT INTO users (username, password_hash, role, created_at)
+                VALUES ('admin', ?, 'admin', ?),
+                       ('user', ?, 'viewer', ?)
+            """, (admin_hash, now_str, user_hash, now_str))

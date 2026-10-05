@@ -175,6 +175,34 @@ class AlertsScreen extends StatelessWidget {
   }
 
   void _showThresholdSettingsDialog(BuildContext context) {
+    final env = Provider.of<EnvironmentProvider>(context, listen: false);
+    if (!env.isAdmin) {
+      showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          backgroundColor: const Color(0xFF1E293B),
+          title: Row(
+            children: const [
+              Icon(Icons.lock_outline, color: Color(0xFFF59E0B)),
+              SizedBox(width: 8),
+              Text('Admin Access Required', style: TextStyle(color: Colors.white, fontSize: 16)),
+            ],
+          ),
+          content: Text(
+            'Threshold configuration is restricted to Administrators.\n\nCurrent Mode: ${env.username} (${env.userRole.toUpperCase()})\n\nPlease log in as Admin using the Profile icon (👤) in the top bar.',
+            style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('OK', style: TextStyle(color: Color(0xFF38BDF8))),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
     final minTController = TextEditingController(text: '18.0');
     final maxTController = TextEditingController(text: '32.0');
 
@@ -182,7 +210,7 @@ class AlertsScreen extends StatelessWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Configure Temperature Thresholds', style: TextStyle(color: Colors.white)),
+        title: const Text('Configure Temperature Thresholds (Admin)', style: TextStyle(color: Colors.white)),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: [

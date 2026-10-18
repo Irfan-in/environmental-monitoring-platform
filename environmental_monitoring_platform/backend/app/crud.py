@@ -262,6 +262,7 @@ def get_combined_history(limit: int = 50, target_date: Optional[str] = None) -> 
                 "indoor_humidity": None,
                 "outdoor_temperature": f["temperature"],
                 "outdoor_humidity": f["humidity"]
+            })
     return points
 
 

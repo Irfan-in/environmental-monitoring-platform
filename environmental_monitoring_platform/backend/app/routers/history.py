@@ -1,9 +1,18 @@
-from typing import Optional
+from typing import Optional, List
 from fastapi import APIRouter, Query
 from app.schemas import HistoryResponse, HistoryPoint
-from app.crud import get_combined_history
+from app.crud import get_combined_history, get_recorded_history_dates
 
 router = APIRouter(prefix="/api/history", tags=["Historical Trends"])
+
+
+@router.get("/dates")
+def get_history_dates():
+    """
+    Retrieve distinct dates (YYYY-MM-DD) that have recorded sensor telemetry in SQLite.
+    Used by the app calendar to display availability indicators under dates.
+    """
+    return {"dates": get_recorded_history_dates()}
 
 
 @router.get("", response_model=HistoryResponse)

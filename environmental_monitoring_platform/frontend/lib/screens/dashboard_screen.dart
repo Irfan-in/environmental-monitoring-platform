@@ -752,26 +752,32 @@ class DashboardScreen extends StatelessWidget {
   }
 
   // 2. User Authentication & RBAC Presentation Sheet
+  // 2. User & Authentication Profile Sheet
   void _showAuthSheet(BuildContext context, EnvironmentProvider env) {
     final userController = TextEditingController();
     final passController = TextEditingController();
     final isDark = env.isDarkMode;
+    bool isRegisterMode = false;
+    bool obscurePassword = true;
+    bool isLoading = false;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
       builder: (ctx) {
         return StatefulBuilder(
           builder: (ctx, setSheetState) {
+            final isLoggedIn = env.isLoggedIn;
+
             return Padding(
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
-                top: 16,
+                top: 14,
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
               child: SingleChildScrollView(
@@ -779,9 +785,10 @@ class DashboardScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Pull Handle
                     Center(
                       child: Container(
-                        width: 40,
+                        width: 36,
                         height: 4,
                         decoration: BoxDecoration(
                           color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
@@ -790,208 +797,411 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: env.isAdmin
-                              ? const Color(0xFF10B981)
-                              : (env.isLoggedIn ? const Color(0xFF38BDF8) : const Color(0xFF64748B)),
-                          child: Icon(
-                            env.isAdmin
-                                ? Icons.admin_panel_settings
-                                : (env.isLoggedIn ? Icons.person : Icons.person_outline),
-                            color: Colors.white,
+
+                    if (isLoggedIn) ...[
+                      // Logged-in Profile View
+                      Row(
+                        children: [
+                          CircleAvatar(
+                            radius: 24,
+                            backgroundColor: env.isAdmin
+                                ? const Color(0xFF10B981)
+                                : const Color(0xFF38BDF8),
+                            child: Icon(
+                              env.isAdmin
+                                  ? Icons.admin_panel_settings
+                                  : Icons.person,
+                              color: Colors.white,
+                              size: 26,
+                            ),
+                          ),
+                          const SizedBox(width: 14),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  env.username,
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 18,
+                                  ),
+                                ),
+                                const SizedBox(height: 3),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: (env.isAdmin ? const Color(0xFF10B981) : const Color(0xFF38BDF8)).withValues(alpha: 0.15),
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    env.isAdmin ? 'ADMINISTRATOR' : 'STANDARD VIEWER',
+                                    style: TextStyle(
+                                      color: env.isAdmin ? const Color(0xFF10B981) : const Color(0xFF38BDF8),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.bold,
+                                      letterSpacing: 0.5,
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 18),
+                      Container(
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Column(
+                        child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              env.isLoggedIn ? env.username : 'Guest (Unauthenticated)',
-                              style: TextStyle(
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                                fontWeight: FontWeight.bold,
-                                fontSize: 17,
-                              ),
+                            Row(
+                              children: [
+                                Icon(Icons.security, size: 16, color: env.isAdmin ? const Color(0xFF10B981) : const Color(0xFF38BDF8)),
+                                const SizedBox(width: 8),
+                                Text(
+                                  env.isAdmin ? 'Full Administrator Access' : 'Viewer Access',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ],
                             ),
+                            const SizedBox(height: 6),
                             Text(
-                              env.isLoggedIn
-                                  ? 'Role: ${env.userRole.toUpperCase()} (RBAC Verified)'
-                                  : 'Limited viewer mode',
+                              env.isAdmin
+                                  ? 'Authorized to calibrate sensors, adjust thresholds, modify hardware intervals, and manage system backups.'
+                                  : 'Authorized to view real-time metrics, comparison cards, and historical trend charts.',
                               style: TextStyle(
-                                color: env.isAdmin
-                                    ? const Color(0xFF10B981)
-                                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                                 fontSize: 12,
-                                fontWeight: FontWeight.w600,
+                                height: 1.4,
                               ),
                             ),
                           ],
                         ),
-                        const Spacer(),
-                        if (env.isLoggedIn)
-                          TextButton.icon(
-                            icon: const Icon(Icons.logout, size: 16, color: Color(0xFFEF4444)),
-                            label: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontSize: 13)),
-                            onPressed: () {
-                              env.logout();
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Logged out. Reverted to Guest mode.')),
-                              );
-                            },
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        child: OutlinedButton.icon(
+                          icon: const Icon(Icons.logout, size: 18, color: Color(0xFFEF4444)),
+                          label: const Text('Sign Out', style: TextStyle(color: Color(0xFFEF4444), fontWeight: FontWeight.bold)),
+                          style: OutlinedButton.styleFrom(
+                            side: const BorderSide(color: Color(0xFFEF4444)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
                           ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-                    const SizedBox(height: 12),
-
-                    // Login / Registration Form
-                    Text(
-                      'USER AUTHENTICATION (PRESENTATION DEMO)',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      'Demonstrate Role-Based Access Control (RBAC): Admin has full threshold and hardware rights, Viewer has read-only access.',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        fontSize: 12,
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-                    TextField(
-                      controller: userController,
-                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
-                      decoration: InputDecoration(
-                        labelText: 'Username',
-                        filled: true,
-                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.person, size: 18),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 10),
-                    TextField(
-                      controller: passController,
-                      obscureText: true,
-                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        filled: true,
-                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        prefixIcon: const Icon(Icons.lock, size: 18),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Quick Demo Fill Chips
-                    Wrap(
-                      spacing: 8,
-                      children: [
-                        ActionChip(
-                          avatar: const Icon(Icons.admin_panel_settings, size: 14, color: Color(0xFF10B981)),
-                          label: const Text('Admin Demo (admin/admin123)', style: TextStyle(fontSize: 11)),
                           onPressed: () {
-                            userController.text = 'admin';
-                            passController.text = 'admin123';
+                            env.logout();
+                            Navigator.pop(ctx);
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Signed out successfully.')),
+                            );
                           },
                         ),
-                        ActionChip(
-                          avatar: const Icon(Icons.person, size: 14, color: Color(0xFF38BDF8)),
-                          label: const Text('Viewer Demo (user/user123)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            userController.text = 'user';
-                            passController.text = 'user123';
-                          },
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 14),
+                      ),
+                    ] else ...[
+                      // Clean Sign In / Register View
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                isRegisterMode ? 'Create Account' : 'Sign In',
+                                style: TextStyle(
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 20,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                isRegisterMode ? 'Register a new user on backend' : 'Sign in to access your platform account',
+                                style: TextStyle(
+                                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ],
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF38BDF8).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.dns_outlined, size: 13, color: Color(0xFF38BDF8)),
+                                SizedBox(width: 4),
+                                Text(
+                                  'Server Active',
+                                  style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.w600),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
 
-                    // Log In and Register Buttons
-                    Row(
-                      children: [
-                        Expanded(
-                          child: ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF38BDF8),
-                              foregroundColor: const Color(0xFF0F172A),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () async {
-                              final u = userController.text.trim();
-                              final p = passController.text.trim();
-                              if (u.isEmpty || p.isEmpty) return;
-                              final err = await env.login(u, p);
-                              if (!ctx.mounted) return;
-                              if (err == null) {
-                                Navigator.pop(ctx);
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Successfully logged in as ${env.username} (${env.userRole.toUpperCase()})'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
-                                );
-                              }
-                            },
-                            child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
+                      // Segmented mode switcher (Sign In vs Register)
+                      Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                          borderRadius: BorderRadius.circular(10),
                         ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: OutlinedButton(
-                            style: OutlinedButton.styleFrom(
-                              foregroundColor: const Color(0xFF38BDF8),
-                              side: const BorderSide(color: Color(0xFF38BDF8)),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                              padding: const EdgeInsets.symmetric(vertical: 12),
-                            ),
-                            onPressed: () async {
-                              final u = userController.text.trim();
-                              final p = passController.text.trim();
-                              if (u.isEmpty || p.isEmpty) return;
-                              final err = await env.register(u, p);
-                              if (!ctx.mounted) return;
-                              if (err == null) {
-                                await env.login(u, p);
-                                if (!context.mounted) return;
-                                Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Registered and logged in as $u!'),
-                                    backgroundColor: const Color(0xFF10B981),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setSheetState(() => isRegisterMode = false),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: !isRegisterMode
+                                        ? (isDark ? const Color(0xFF334155) : Colors.white)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: !isRegisterMode
+                                        ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                        : null,
                                   ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
-                                );
-                              }
-                            },
-                            child: const Text('Register'),
-                          ),
+                                  child: Center(
+                                    child: Text(
+                                      'Sign In',
+                                      style: TextStyle(
+                                        color: !isRegisterMode
+                                            ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                                            : const Color(0xFF94A3B8),
+                                        fontWeight: !isRegisterMode ? FontWeight.bold : FontWeight.normal,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                            Expanded(
+                              child: GestureDetector(
+                                onTap: () => setSheetState(() => isRegisterMode = true),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 8),
+                                  decoration: BoxDecoration(
+                                    color: isRegisterMode
+                                        ? (isDark ? const Color(0xFF334155) : Colors.white)
+                                        : Colors.transparent,
+                                    borderRadius: BorderRadius.circular(8),
+                                    boxShadow: isRegisterMode
+                                        ? [BoxShadow(color: Colors.black.withValues(alpha: 0.05), blurRadius: 4)]
+                                        : null,
+                                  ),
+                                  child: Center(
+                                    child: Text(
+                                      'Register',
+                                      style: TextStyle(
+                                        color: isRegisterMode
+                                            ? (isDark ? Colors.white : const Color(0xFF0F172A))
+                                            : const Color(0xFF94A3B8),
+                                        fontWeight: isRegisterMode ? FontWeight.bold : FontWeight.normal,
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
+                      ),
+                      const SizedBox(height: 14),
+
+                      // Username field
+                      TextField(
+                        controller: userController,
+                        style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                        decoration: InputDecoration(
+                          hintText: 'Enter username',
+                          labelText: 'Username',
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          prefixIcon: const Icon(Icons.person_outline, size: 20),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Password field with obscure toggle
+                      TextField(
+                        controller: passController,
+                        obscureText: obscurePassword,
+                        style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                        decoration: InputDecoration(
+                          hintText: 'Enter password',
+                          labelText: 'Password',
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF8FAFC),
+                          prefixIcon: const Icon(Icons.lock_outline, size: 20),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                              size: 20,
+                              color: const Color(0xFF94A3B8),
+                            ),
+                            onPressed: () => setSheetState(() => obscurePassword = !obscurePassword),
+                          ),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Quick Fill Presets (Fast 1-tap for presentation)
+                      Row(
+                        children: [
+                          Text(
+                            'Quick Demo:',
+                            style: TextStyle(
+                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () {
+                              userController.text = 'admin';
+                              passController.text = 'admin123';
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF10B981).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.4)),
+                              ),
+                              child: const Text('Admin', style: TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          InkWell(
+                            borderRadius: BorderRadius.circular(6),
+                            onTap: () {
+                              userController.text = 'user';
+                              passController.text = 'user123';
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(color: const Color(0xFF38BDF8).withValues(alpha: 0.4)),
+                              ),
+                              child: const Text('Viewer', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11, fontWeight: FontWeight.bold)),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Action Button
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF38BDF8),
+                            foregroundColor: const Color(0xFF0F172A),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                          ),
+                          onPressed: isLoading
+                              ? null
+                              : () async {
+                                  final u = userController.text.trim();
+                                  final p = passController.text.trim();
+                                  if (u.isEmpty || p.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('Please enter username and password.')),
+                                    );
+                                    return;
+                                  }
+                                  setSheetState(() => isLoading = true);
+
+                                  if (isRegisterMode) {
+                                    final err = await env.register(u, p);
+                                    if (!ctx.mounted) return;
+                                    setSheetState(() => isLoading = false);
+                                    if (err == null) {
+                                      await env.login(u, p);
+                                      if (!context.mounted) return;
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Registered and signed in as $u'),
+                                          backgroundColor: const Color(0xFF10B981),
+                                        ),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
+                                      );
+                                    }
+                                  } else {
+                                    final err = await env.login(u, p);
+                                    if (!ctx.mounted) return;
+                                    setSheetState(() => isLoading = false);
+                                    if (err == null) {
+                                      Navigator.pop(ctx);
+                                      if (!context.mounted) return;
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text('Signed in as ${env.username} (${env.userRole.toUpperCase()})'),
+                                          backgroundColor: const Color(0xFF10B981),
+                                        ),
+                                      );
+                                    } else {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(err.contains('Failed host lookup') || err.contains('Connection refused')
+                                              ? 'Cannot reach server at ${ApiService.baseUrl}. Start server or check settings.'
+                                              : err),
+                                          backgroundColor: const Color(0xFFEF4444),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                },
+                          child: isLoading
+                              ? const SizedBox(
+                                  height: 20,
+                                  width: 20,
+                                  child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF0F172A)),
+                                )
+                              : Text(
+                                  isRegisterMode ? 'Create Account' : 'Sign In',
+                                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
+                                ),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
                   ],
                 ),
               ),

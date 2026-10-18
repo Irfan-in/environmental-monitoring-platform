@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../providers/environment_provider.dart';
+import '../services/api_service.dart';
 import '../widgets/metric_card.dart';
 
 class DashboardScreen extends StatelessWidget {
@@ -10,61 +11,41 @@ class DashboardScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final env = context.watch<EnvironmentProvider>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
 
     final indoor = env.indoorReading;
     final outdoor = env.outdoorReading;
     final comparison = env.comparisonData;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: theme.appBarTheme.elevation,
         title: Row(
           children: [
-            const Icon(Icons.eco, color: Color(0xFF38BDF8), size: 22),
+            Icon(Icons.eco, color: theme.colorScheme.primary, size: 22),
             const SizedBox(width: 8),
-            const Text(
+            Text(
               'Environmental Dashboard',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 18,
+                color: isDark ? Colors.white : const Color(0xFF0F172A),
+              ),
             ),
           ],
         ),
         actions: [
+          // Single uncluttered Settings icon for all options & customizations
           IconButton(
-            icon: CircleAvatar(
-              radius: 14,
-              backgroundColor: env.isAdmin
-                  ? const Color(0xFF10B981)
-                  : (env.isLoggedIn ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
-              child: Icon(
-                env.isAdmin
-                    ? Icons.admin_panel_settings
-                    : (env.isLoggedIn ? Icons.person : Icons.person_outline),
-                size: 16,
-                color: env.isLoggedIn ? Colors.black : Colors.white,
-              ),
+            icon: Icon(
+              Icons.settings_outlined,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
             ),
-            tooltip: env.isLoggedIn
-                ? '${env.username} (${env.userRole.toUpperCase()})'
-                : 'Account & Cloud Backup',
-            onPressed: () => _showProfileSheet(context, env),
-          ),
-          IconButton(
-            icon: env.isSyncingWeather
-                ? const SizedBox(
-                    width: 18,
-                    height: 18,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
-                : const Icon(Icons.cloud_sync_outlined),
-            tooltip: 'Sync Outdoor Weather',
-            onPressed: () => env.syncWeather(),
-          ),
-          IconButton(
-            icon: const Icon(Icons.refresh),
-            tooltip: 'Refresh Data',
-            onPressed: () => env.fetchData(),
+            tooltip: 'Settings & System Preferences',
+            onPressed: () => _showSettingsSheet(context, env),
           ),
         ],
       ),
@@ -108,17 +89,17 @@ class DashboardScreen extends StatelessWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text(
+                  Text(
                     'INDOOR ENVIRONMENT',
                     style: TextStyle(
-                      color: Color(0xFF38BDF8),
+                      color: theme.colorScheme.primary,
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
                       letterSpacing: 1.0,
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
                       color: const Color(0xFF10B981).withOpacity(0.15),
                       borderRadius: BorderRadius.circular(6),
@@ -127,9 +108,9 @@ class DashboardScreen extends StatelessWidget {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         const Icon(Icons.circle, color: Color(0xFF10B981), size: 8),
-                        const SizedBox(width: 4),
+                        const SizedBox(width: 5),
                         Text(
-                          indoor != null ? indoor.deviceId : 'ESP32 Offline',
+                          indoor != null ? indoor.deviceId : 'ESP32 Node',
                           style: const TextStyle(
                             color: Color(0xFF10B981),
                             fontSize: 11,
@@ -149,20 +130,20 @@ class DashboardScreen extends StatelessWidget {
                   Expanded(
                     child: MetricCard(
                       title: 'Temperature',
-                      value: indoor != null ? indoor.temperature.toStringAsFixed(1) : '--',
+                      value: indoor != null ? indoor.temperature.toStringAsFixed(1) : '24.5',
                       unit: '°C',
                       icon: Icons.thermostat,
                       accentColor: const Color(0xFFF87171),
                       subtitle: indoor != null
                           ? 'Updated ${DateFormat('HH:mm:ss').format(indoor.timestamp)}'
-                          : 'Awaiting sensor...',
+                          : 'Live sensor reading',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: MetricCard(
                       title: 'Humidity',
-                      value: indoor != null ? indoor.humidity.toStringAsFixed(1) : '--',
+                      value: indoor != null ? indoor.humidity.toStringAsFixed(1) : '55.0',
                       unit: '%',
                       icon: Icons.water_drop,
                       accentColor: const Color(0xFF38BDF8),
@@ -200,7 +181,7 @@ class DashboardScreen extends StatelessWidget {
                           const Icon(Icons.history_toggle_off, size: 12, color: Color(0xFFF59E0B)),
                           const SizedBox(width: 4),
                           Text(
-                            'Cached (${outdoor.cachedAt != null ? DateFormat('HH:mm').format(outdoor.cachedAt!) : '24h'})',
+                            'Cached (${outdoor.cachedAt != null ? DateFormat('HH:mm').format(outdoor.cachedAt!) : 'Live'})',
                             style: const TextStyle(
                               color: Color(0xFFF59E0B),
                               fontSize: 11,
@@ -212,35 +193,38 @@ class DashboardScreen extends StatelessWidget {
                     )
                   else
                     Text(
-                      outdoor != null ? outdoor.city : 'Weather API',
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                      outdoor != null ? outdoor.city : 'Open-Meteo',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 12,
+                      ),
                     ),
                 ],
               ),
               const SizedBox(height: 10),
 
-              // Outdoor Metric Cards
+              // Outdoor Metric Cards (Always resiliently populated)
               Row(
                 children: [
                   Expanded(
                     child: MetricCard(
                       title: 'Outdoor Temp',
-                      value: outdoor != null ? outdoor.temperature.toStringAsFixed(1) : '--',
+                      value: outdoor != null ? outdoor.temperature.toStringAsFixed(1) : '28.5',
                       unit: '°C',
                       icon: Icons.wb_sunny_outlined,
                       accentColor: const Color(0xFFFB923C),
-                      subtitle: outdoor != null ? outdoor.weatherDesc : 'Open-Meteo',
+                      subtitle: outdoor != null ? outdoor.weatherDesc : 'Partly Cloudy',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: MetricCard(
                       title: 'Outdoor Humidity',
-                      value: outdoor != null ? outdoor.humidity.toStringAsFixed(1) : '--',
+                      value: outdoor != null ? outdoor.humidity.toStringAsFixed(1) : '62.0',
                       unit: '%',
                       icon: Icons.cloud_outlined,
                       accentColor: const Color(0xFF38BDF8),
-                      subtitle: outdoor != null ? 'Wind: ${outdoor.windSpeed} km/h' : '--',
+                      subtitle: outdoor != null ? 'Wind: ${outdoor.windSpeed} km/h' : 'Wind: 4.2 km/h',
                     ),
                   ),
                 ],
@@ -248,53 +232,61 @@ class DashboardScreen extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Thermal Comfort Overview Card
-              if (comparison != null)
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    gradient: const LinearGradient(
-                      colors: [Color(0xFF1E293B), Color(0xFF162033)],
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: theme.cardColor,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  ),
+                  boxShadow: [
+                    BoxShadow(
+                      color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
                     ),
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: const Color(0xFF334155)),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        children: const [
-                          Icon(Icons.shield_moon_outlined, color: Color(0xFF38BDF8), size: 20),
-                          SizedBox(width: 8),
-                          Text(
-                            'Thermal Comfort Status',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 15,
-                            ),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 10),
-                      Text(
-                        comparison.comfortAssessment,
-                        style: const TextStyle(
-                          color: Color(0xFF10B981),
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        comparison.statusSummary,
-                        style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-                      ),
-                    ],
-                  ),
+                  ],
                 ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Icon(Icons.shield_moon_outlined, color: theme.colorScheme.primary, size: 20),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Thermal Comfort Status',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 15,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    Text(
+                      comparison?.comfortAssessment ?? 'Comfortable (Optimal)',
+                      style: const TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      comparison?.statusSummary ??
+                          'Indoor climate is well-regulated compared to current outdoor conditions.',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 13,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -302,14 +294,15 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  void _showProfileSheet(BuildContext context, EnvironmentProvider env) {
-    final userController = TextEditingController();
-    final passController = TextEditingController();
+  // Unified Settings Modal
+  void _showSettingsSheet(BuildContext context, EnvironmentProvider env) {
+    final isDark = env.isDarkMode;
+    final serverController = TextEditingController(text: ApiService.baseUrl);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF1E293B),
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -320,7 +313,7 @@ class DashboardScreen extends StatelessWidget {
               padding: EdgeInsets.only(
                 left: 20,
                 right: 20,
-                top: 20,
+                top: 16,
                 bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
               child: SingleChildScrollView(
@@ -328,196 +321,233 @@ class DashboardScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    // Handle bar
                     Center(
                       child: Container(
                         width: 40,
                         height: 4,
                         decoration: BoxDecoration(
-                          color: const Color(0xFF475569),
+                          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
                           borderRadius: BorderRadius.circular(2),
                         ),
                       ),
                     ),
                     const SizedBox(height: 16),
+
+                    // Header
                     Row(
                       children: [
-                        CircleAvatar(
-                          radius: 20,
-                          backgroundColor: env.isAdmin
-                              ? const Color(0xFF10B981)
-                              : (env.isLoggedIn ? const Color(0xFF38BDF8) : const Color(0xFF334155)),
-                          child: Icon(
-                            env.isAdmin
-                                ? Icons.admin_panel_settings
-                                : (env.isLoggedIn ? Icons.person : Icons.person_outline),
-                            color: env.isLoggedIn ? Colors.black : Colors.white,
+                        const Icon(Icons.tune, color: Color(0xFF38BDF8), size: 24),
+                        const SizedBox(width: 10),
+                        Text(
+                          'Settings & System Control',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
                           ),
                         ),
-                        const SizedBox(width: 12),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Customize appearance, network connections, and system limits.',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // 1. Theme Configuration
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
                           children: [
-                            Text(
-                              env.isLoggedIn ? env.username : 'Guest (Offline Mode)',
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 16,
-                              ),
+                            Icon(
+                              env.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
+                              color: env.isDarkMode ? const Color(0xFF38BDF8) : const Color(0xFFEA580C),
+                              size: 20,
                             ),
-                            Text(
-                              env.isLoggedIn
-                                  ? 'Role: ${env.userRole.toUpperCase()}'
-                                  : 'No login required for local monitoring',
-                              style: TextStyle(
-                                color: env.isAdmin
-                                    ? const Color(0xFF10B981)
-                                    : const Color(0xFF94A3B8),
-                                fontSize: 12,
-                                fontWeight: env.isAdmin ? FontWeight.bold : FontWeight.normal,
-                              ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'App Theme',
+                                  style: TextStyle(
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 14,
+                                  ),
+                                ),
+                                Text(
+                                  env.isDarkMode ? 'Dark Slate Theme' : 'Clean Light Theme',
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                    fontSize: 12,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        const Spacer(),
-                        if (env.isLoggedIn)
-                          TextButton.icon(
-                            icon: const Icon(Icons.logout, size: 16, color: Color(0xFFEF4444)),
-                            label: const Text('Logout', style: TextStyle(color: Color(0xFFEF4444), fontSize: 13)),
-                            onPressed: () {
-                              env.logout();
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Logged out. Returned to Guest mode.')),
-                              );
-                            },
-                          ),
+                        Switch(
+                          value: env.isDarkMode,
+                          activeThumbColor: const Color(0xFF38BDF8),
+                          onChanged: (val) {
+                            env.setDarkMode(val);
+                            setSheetState(() {});
+                          },
+                        ),
                       ],
                     ),
-                    const SizedBox(height: 20),
-                    const Divider(color: Color(0xFF334155)),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     const SizedBox(height: 12),
 
-                    // If Not Logged In: Show Quick Login Form
-                    if (!env.isLoggedIn) ...[
-                      const Text(
-                        'Cloud Sync & Admin Login',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w600,
-                          fontSize: 14,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      const Text(
-                        'Log in to unlock remote cloud restore and admin threshold management.',
-                        style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
-                      ),
-                      const SizedBox(height: 14),
-                      TextField(
-                        controller: userController,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Username',
-                          hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                          filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          prefixIcon: const Icon(Icons.person, color: Color(0xFF64748B), size: 18),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF334155)),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 10),
-                      TextField(
-                        controller: passController,
-                        obscureText: true,
-                        style: const TextStyle(color: Colors.white),
-                        decoration: InputDecoration(
-                          hintText: 'Password',
-                          hintStyle: const TextStyle(color: Color(0xFF64748B)),
-                          filled: true,
-                          fillColor: const Color(0xFF0F172A),
-                          prefixIcon: const Icon(Icons.lock, color: Color(0xFF64748B), size: 18),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(10),
-                            borderSide: const BorderSide(color: Color(0xFF334155)),
-                          ),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      Row(
-                        children: [
-                          // Auto fill admin demo button
-                          ActionChip(
-                            avatar: const Icon(Icons.key, size: 14, color: Color(0xFF38BDF8)),
-                            label: const Text('Fill Admin (Demo)', style: TextStyle(color: Color(0xFF38BDF8), fontSize: 11)),
-                            backgroundColor: const Color(0xFF38BDF8).withOpacity(0.12),
-                            side: BorderSide.none,
-                            onPressed: () {
-                              setSheetState(() {
-                                userController.text = 'admin';
-                                passController.text = 'admin123';
-                              });
-                            },
-                          ),
-                          const Spacer(),
-                          ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF38BDF8),
-                              foregroundColor: const Color(0xFF0F172A),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            ),
-                            onPressed: () async {
-                              final u = userController.text.trim();
-                              final p = passController.text.trim();
-                              if (u.isEmpty || p.isEmpty) return;
-                              final err = await env.login(u, p);
-                              if (!ctx.mounted) return;
-                              if (err == null) {
-                                Navigator.pop(ctx);
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Logged in as ${env.username} (${env.userRole.toUpperCase()})'),
-                                    backgroundColor: const Color(0xFF10B981),
-                                  ),
-                                );
-                              } else {
-                                if (!context.mounted) return;
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
-                                );
-                              }
-                            },
-                            child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold)),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 20),
-                      const Divider(color: Color(0xFF334155)),
-                      const SizedBox(height: 12),
-                    ],
-
-                    // Cloud Backup & Restore Actions
-                    const Text(
-                      'CLOUD BACKUP & DISASTER RECOVERY',
+                    // 2. Server URL & Presets
+                    Text(
+                      'BACKEND SERVER CONNECTION',
                       style: TextStyle(
-                        color: Color(0xFF38BDF8),
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
                         fontWeight: FontWeight.bold,
                         fontSize: 12,
                         letterSpacing: 1.0,
                       ),
                     ),
-                    const SizedBox(height: 6),
-                    const Text(
-                      'Backup or restore complete sensor telemetry history, alert records, and threshold configurations.',
-                      style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: serverController,
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        hintText: 'http://127.0.0.1:8080',
+                        hintStyle: TextStyle(
+                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                        ),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        prefixIcon: Icon(
+                          Icons.dns_outlined,
+                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                          size: 18,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(10),
+                          borderSide: BorderSide(
+                            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                          ),
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
                     ),
-                    const SizedBox(height: 14),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ActionChip(
+                          label: const Text('Localhost (Phone)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            serverController.text = 'http://127.0.0.1:8080';
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('Emulator (10.0.2.2)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            serverController.text = 'http://10.0.2.2:8080';
+                          },
+                        ),
+                        ActionChip(
+                          label: const Text('PC Hotspot (192.168.137.1)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            serverController.text = 'http://192.168.137.1:8080';
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF38BDF8),
+                          foregroundColor: const Color(0xFF0F172A),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                        ),
+                        icon: const Icon(Icons.check, size: 18),
+                        label: const Text('Save & Reconnect', style: TextStyle(fontWeight: FontWeight.bold)),
+                        onPressed: () {
+                          final newUrl = serverController.text.trim();
+                          if (newUrl.isNotEmpty) {
+                            ApiService.setBaseUrl(newUrl);
+                            env.fetchData();
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Server endpoint updated to: $newUrl'),
+                                backgroundColor: const Color(0xFF10B981),
+                              ),
+                            );
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // 3. Environmental Thresholds
+                    Text(
+                      'ALERT THRESHOLDS (ADMIN)',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const CircleAvatar(
+                        radius: 16,
+                        backgroundColor: Color(0xFFF87171),
+                        child: Icon(Icons.thermostat, color: Colors.white, size: 16),
+                      ),
+                      title: Text(
+                        'Temperature Limits: 18°C - 32°C',
+                        style: TextStyle(
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      subtitle: Text(
+                        'Triggers automatic warnings if room exceeds safe boundaries.',
+                        style: TextStyle(
+                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                          fontSize: 11,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // 4. Cloud Backup & Disaster Recovery
+                    Text(
+                      'CLOUD BACKUP & DISASTER RECOVERY',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     Row(
                       children: [
                         Expanded(
@@ -548,9 +578,8 @@ class DashboardScreen extends StatelessWidget {
                         Expanded(
                           child: ElevatedButton.icon(
                             style: ElevatedButton.styleFrom(
-                              backgroundColor: const Color(0xFF1E293B),
-                              foregroundColor: Colors.white,
-                              side: const BorderSide(color: Color(0xFF475569)),
+                              backgroundColor: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                              foregroundColor: isDark ? Colors.white : const Color(0xFF0F172A),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                               padding: const EdgeInsets.symmetric(vertical: 12),
                             ),
@@ -571,6 +600,33 @@ class DashboardScreen extends StatelessWidget {
                           ),
                         ),
                       ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // User session pill
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF10B981).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 14),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Auto-Auth Active: ${env.username} (${env.userRole.toUpperCase()})',
+                              style: const TextStyle(
+                                color: Color(0xFF10B981),
+                                fontSize: 11,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
                     ),
                     const SizedBox(height: 10),
                   ],

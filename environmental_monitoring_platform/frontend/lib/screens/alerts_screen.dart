@@ -11,25 +11,37 @@ class AlertsScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final env = context.watch<EnvironmentProvider>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
     final alerts = env.alerts;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        title: const Text(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: theme.appBarTheme.elevation,
+        title: Text(
           'Alerts & Thresholds',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.settings_ethernet),
+            icon: Icon(
+              Icons.settings_ethernet,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
             tooltip: 'Server Connection Settings',
             onPressed: () => _showServerSettingsDialog(context),
           ),
           IconButton(
-            icon: const Icon(Icons.tune),
+            icon: Icon(
+              Icons.tune,
+              color: isDark ? Colors.white : const Color(0xFF0F172A),
+            ),
             tooltip: 'Configure Thresholds',
             onPressed: () => _showThresholdSettingsDialog(context),
           ),
@@ -39,17 +51,24 @@ class AlertsScreen extends StatelessWidget {
           ? Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
-                children: const [
-                  Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 48),
-                  SizedBox(height: 12),
+                children: [
+                  const Icon(Icons.check_circle_outline, color: Color(0xFF10B981), size: 48),
+                  const SizedBox(height: 12),
                   Text(
                     'All environmental readings are normal',
-                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
                   ),
-                  SizedBox(height: 4),
+                  const SizedBox(height: 4),
                   Text(
                     'No thresholds violated.',
-                    style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                    style: TextStyle(
+                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                      fontSize: 13,
+                    ),
                   ),
                 ],
               ),
@@ -63,13 +82,20 @@ class AlertsScreen extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 12),
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF1E293B),
+                    color: theme.cardColor,
                     borderRadius: BorderRadius.circular(12),
                     border: Border.all(
                       color: alert.isAcknowledged
-                          ? const Color(0xFF334155)
+                          ? (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))
                           : const Color(0xFFEF4444).withOpacity(0.5),
                     ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: isDark ? Colors.black.withOpacity(0.12) : Colors.black.withOpacity(0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 3),
+                      ),
+                    ],
                   ),
                   child: Row(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -93,15 +119,18 @@ class AlertsScreen extends StatelessWidget {
                                 ),
                                 Text(
                                   DateFormat('HH:mm:ss').format(alert.timestamp),
-                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 11),
+                                  style: TextStyle(
+                                    color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
+                                    fontSize: 11,
+                                  ),
                                 ),
                               ],
                             ),
                             const SizedBox(height: 8),
                             Text(
                               alert.message,
-                              style: const TextStyle(
-                                color: Colors.white,
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 fontWeight: FontWeight.w600,
                                 fontSize: 13,
                               ),
@@ -109,7 +138,10 @@ class AlertsScreen extends StatelessWidget {
                             const SizedBox(height: 4),
                             Text(
                               'Source: ${alert.source} | Value: ${alert.triggeredValue} (Limit: ${alert.thresholdValue})',
-                              style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 11),
+                              style: TextStyle(
+                                color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                fontSize: 11,
+                              ),
                             ),
                           ],
                         ),

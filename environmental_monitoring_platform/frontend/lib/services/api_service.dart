@@ -90,9 +90,10 @@ class ApiService {
   }
 
   // 6. Fetch Historical Trends
-  static Future<List<ChartPoint>> getHistory({String timeframe = '24h'}) async {
+  static Future<List<ChartPoint>> getHistory({String timeframe = '24h', String? date}) async {
     try {
-      final res = await http.get(Uri.parse('$baseUrl/api/history?timeframe=$timeframe&limit=30'));
+      final dateParam = date != null ? '&date=$date' : '';
+      final res = await http.get(Uri.parse('$baseUrl/api/history?timeframe=$timeframe&limit=50$dateParam'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final list = data['points'] as List? ?? [];

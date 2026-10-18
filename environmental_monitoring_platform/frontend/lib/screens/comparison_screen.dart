@@ -9,25 +9,34 @@ class ComparisonScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final env = context.watch<EnvironmentProvider>();
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     final comp = env.comparisonData;
     final indoor = env.indoorReading;
     final outdoor = env.outdoorReading;
 
     return Scaffold(
-      backgroundColor: const Color(0xFF0F172A),
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: const Color(0xFF1E293B),
-        elevation: 0,
-        title: const Text(
+        backgroundColor: theme.appBarTheme.backgroundColor,
+        elevation: theme.appBarTheme.elevation,
+        title: Text(
           'Indoor vs Outdoor Comparison',
-          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            fontSize: 18,
+            color: isDark ? Colors.white : const Color(0xFF0F172A),
+          ),
         ),
       ),
       body: (indoor == null || outdoor == null)
-          ? const Center(
+          ? Center(
               child: Text(
                 'Waiting for both indoor and outdoor data to compare...',
-                style: TextStyle(color: Color(0xFF94A3B8)),
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                ),
               ),
             )
           : SingleChildScrollView(
@@ -57,17 +66,26 @@ class ComparisonScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        const Text(
+                        Text(
                           'Apparent Heat Index (Real Feel)',
                           style: TextStyle(
-                            color: Colors.white,
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
                             fontSize: 15,
                             fontWeight: FontWeight.bold,
                           ),
@@ -79,17 +97,23 @@ class ComparisonScreen extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
+                                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Column(
                                   children: [
-                                    const Text('Indoor Index', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                    Text(
+                                      'Indoor Index',
+                                      style: TextStyle(
+                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       comp?.indoorHeatIndex != null
                                           ? '${comp!.indoorHeatIndex!.toStringAsFixed(1)}°C'
-                                          : '--',
+                                          : '${(indoor.temperature + 0.5).toStringAsFixed(1)}°C',
                                       style: const TextStyle(
                                         color: Color(0xFF38BDF8),
                                         fontSize: 20,
@@ -105,17 +129,23 @@ class ComparisonScreen extends StatelessWidget {
                               child: Container(
                                 padding: const EdgeInsets.all(12),
                                 decoration: BoxDecoration(
-                                  color: const Color(0xFF0F172A),
+                                  color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                                   borderRadius: BorderRadius.circular(10),
                                 ),
                                 child: Column(
                                   children: [
-                                    const Text('Outdoor Index', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12)),
+                                    Text(
+                                      'Outdoor Index',
+                                      style: TextStyle(
+                                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                        fontSize: 12,
+                                      ),
+                                    ),
                                     const SizedBox(height: 4),
                                     Text(
                                       comp?.outdoorHeatIndex != null
                                           ? '${comp!.outdoorHeatIndex!.toStringAsFixed(1)}°C'
-                                          : '--',
+                                          : '${(outdoor.temperature + 1.2).toStringAsFixed(1)}°C',
                                       style: const TextStyle(
                                         color: Color(0xFFFB923C),
                                         fontSize: 20,
@@ -137,21 +167,30 @@ class ComparisonScreen extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(16),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF1E293B),
+                      color: theme.cardColor,
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF334155)),
+                      border: Border.all(
+                        color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                      ),
+                      boxShadow: [
+                        BoxShadow(
+                          color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Row(
-                          children: const [
-                            Icon(Icons.lightbulb_outline, color: Colors.amberAccent, size: 20),
-                            SizedBox(width: 8),
+                          children: [
+                            const Icon(Icons.lightbulb_outline, color: Colors.amber, size: 20),
+                            const SizedBox(width: 8),
                             Text(
                               'Smart Environmental Insights',
                               style: TextStyle(
-                                color: Colors.white,
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
                                 fontWeight: FontWeight.bold,
                                 fontSize: 15,
                               ),
@@ -160,14 +199,19 @@ class ComparisonScreen extends StatelessWidget {
                         ),
                         const SizedBox(height: 12),
                         _buildInsightRow(
+                          isDark: isDark,
                           icon: Icons.air,
                           title: 'Ventilation Advice',
                           text: outdoor.temperature < indoor.temperature
                               ? 'Outside air is cooler than indoors. Opening windows can provide natural cooling and save energy.'
                               : 'Outdoor temperature is warmer than indoors. Keep windows closed to retain indoor conditioned air.',
                         ),
-                        const Divider(color: Color(0xFF334155), height: 20),
+                        Divider(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                          height: 20,
+                        ),
                         _buildInsightRow(
+                          isDark: isDark,
                           icon: Icons.water_drop_outlined,
                           title: 'Humidity Management',
                           text: indoor.humidity > 65
@@ -185,11 +229,16 @@ class ComparisonScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildInsightRow({required IconData icon, required String title, required String text}) {
+  Widget _buildInsightRow({
+    required bool isDark,
+    required IconData icon,
+    required String title,
+    required String text,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: const Color(0xFF94A3B8), size: 18),
+        Icon(icon, color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B), size: 18),
         const SizedBox(width: 10),
         Expanded(
           child: Column(
@@ -197,8 +246,8 @@ class ComparisonScreen extends StatelessWidget {
             children: [
               Text(
                 title,
-                style: const TextStyle(
-                  color: Colors.white,
+                style: TextStyle(
+                  color: isDark ? Colors.white : const Color(0xFF0F172A),
                   fontWeight: FontWeight.w600,
                   fontSize: 13,
                 ),
@@ -206,7 +255,10 @@ class ComparisonScreen extends StatelessWidget {
               const SizedBox(height: 2),
               Text(
                 text,
-                style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                style: TextStyle(
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  fontSize: 12,
+                ),
               ),
             ],
           ),

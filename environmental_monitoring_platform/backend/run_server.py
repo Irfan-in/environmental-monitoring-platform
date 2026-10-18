@@ -187,7 +187,8 @@ def run_builtin_server(host="0.0.0.0", port=8080):
                 self.wfile.write(json.dumps(resp).encode("utf-8"))
 
             elif path == "/api/history":
-                raw = get_combined_history(limit=50)
+                target_date = query["date"][0] if "date" in query else None
+                raw = get_combined_history(limit=50, target_date=target_date)
                 self._set_headers(200)
                 self.wfile.write(json.dumps({"timeframe": "24h", "count": len(raw), "points": raw}).encode("utf-8"))
 

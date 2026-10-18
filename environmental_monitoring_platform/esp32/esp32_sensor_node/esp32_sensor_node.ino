@@ -31,13 +31,12 @@
 #include <Adafruit_SSD1306.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
-#include "BluetoothSerial.h"
 #include <Preferences.h>
 
-// ==============================================================================
-// 1. Dual-Connectivity Objects & Settings
-// ==============================================================================
+#include <BluetoothSerial.h>
+
 BluetoothSerial SerialBT;
+
 Preferences preferences;
 
 // Dynamic Wi-Fi credentials stored in flash NVS

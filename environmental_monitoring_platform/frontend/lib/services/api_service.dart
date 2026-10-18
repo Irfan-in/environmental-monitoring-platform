@@ -7,9 +7,9 @@ import '../models/alert_item.dart';
 import '../models/chart_point.dart';
 
 class ApiService {
-  // Defaults to localhost on the phone (where Pydroid 3 runs)
+  // Live Render Cloud Production Backend (24/7 Global HTTPS)
   static String get defaultBaseUrl {
-    return 'http://127.0.0.1:8080';
+    return 'https://environmental-monitoring-backend.onrender.com';
   }
 
   static String _baseUrl = defaultBaseUrl;

@@ -1339,7 +1339,7 @@ class DashboardScreen extends StatelessWidget {
                       controller: serverController,
                       style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
                       decoration: InputDecoration(
-                        hintText: 'http://127.0.0.1:8080',
+                        hintText: 'https://environmental-monitoring-backend.onrender.com',
                         filled: true,
                         fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
                         prefixIcon: const Icon(Icons.dns_outlined, size: 18),
@@ -1352,16 +1352,17 @@ class DashboardScreen extends StatelessWidget {
                       spacing: 8,
                       children: [
                         ActionChip(
+                          avatar: const Icon(Icons.cloud_done, size: 14, color: Color(0xFF38BDF8)),
+                          label: const Text('Render Cloud (Default)', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                          onPressed: () => serverController.text = 'https://environmental-monitoring-backend.onrender.com',
+                        ),
+                        ActionChip(
                           label: const Text('Localhost (Phone)', style: TextStyle(fontSize: 11)),
                           onPressed: () => serverController.text = 'http://127.0.0.1:8080',
                         ),
                         ActionChip(
                           label: const Text('Emulator (10.0.2.2)', style: TextStyle(fontSize: 11)),
                           onPressed: () => serverController.text = 'http://10.0.2.2:8080',
-                        ),
-                        ActionChip(
-                          label: const Text('PC Hotspot (192.168.137.1)', style: TextStyle(fontSize: 11)),
-                          onPressed: () => serverController.text = 'http://192.168.137.1:8080',
                         ),
                       ],
                     ),

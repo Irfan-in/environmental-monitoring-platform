@@ -24,6 +24,7 @@
  */
 
 #include <WiFi.h>
+#include <WiFiClientSecure.h>
 #include <HTTPClient.h>
 #include <Wire.h>
 #include <Adafruit_GFX.h>
@@ -147,13 +148,8 @@ void uploadToServer(float temp, float hum) {
     return;
   }
 
-  // Automatic target using Gateway IP on port 8080
-  String serverUrl = "http://" + WiFi.gatewayIP().toString() + ":8080/api/indoor/reading";
-
-  HTTPClient http;
-  http.begin(serverUrl);
-  http.addHeader("Content-Type", "application/json");
-  http.setTimeout(3000);
+  // 1. Primary Target: 24/7 Render Cloud Backend (HTTPS)
+  String serverUrl = "https://environmental-monitoring-backend.onrender.com/api/indoor/reading";
 
   #if ARDUINOJSON_VERSION_MAJOR >= 7
     JsonDocument doc;
@@ -168,11 +164,33 @@ void uploadToServer(float temp, float hum) {
   String payload;
   serializeJson(doc, payload);
 
+  WiFiClientSecure client;
+  client.setInsecure(); // Disable certificate validation on ESP32
+
+  HTTPClient http;
+  http.begin(client, serverUrl);
+  http.addHeader("Content-Type", "application/json");
+  http.setTimeout(4000);
+
   int httpCode = http.POST(payload);
   if (httpCode == 200 || httpCode == 201) {
-    statusLine = "Server Sync OK [200]";
+    statusLine = "Cloud Sync OK [200]";
   } else {
-    statusLine = "Sync Code: " + String(httpCode);
+    // 2. Fallback Target: Local Gateway on port 8080
+    http.end();
+    String localUrl = "http://" + WiFi.gatewayIP().toString() + ":8080/api/indoor/reading";
+    HTTPClient localHttp;
+    localHttp.begin(localUrl);
+    localHttp.addHeader("Content-Type", "application/json");
+    localHttp.setTimeout(2000);
+    httpCode = localHttp.POST(payload);
+    if (httpCode == 200 || httpCode == 201) {
+      statusLine = "Local Sync OK [200]";
+    } else {
+      statusLine = "Sync Code: " + String(httpCode);
+    }
+    localHttp.end();
+    return;
   }
   http.end();
 }

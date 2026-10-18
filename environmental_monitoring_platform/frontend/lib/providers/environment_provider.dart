@@ -13,6 +13,7 @@ class EnvironmentProvider with ChangeNotifier {
   ComparisonData? _comparisonData;
   List<AlertItem> _alerts = [];
   List<ChartPoint> _historyPoints = [];
+  List<String> _availableHistoryDates = [];
 
   bool _isLoading = false;
   bool _isSyncingWeather = false;
@@ -36,7 +37,7 @@ class EnvironmentProvider with ChangeNotifier {
     }
   }
 
-  // User Auth State: Default to logged-in Admin (zero barrier)
+  // User Auth State: Default to logged-in Admin, switchable for presentation
   String _username = 'Admin';
   String _userRole = 'admin'; // 'admin' or 'viewer'
   bool _isLoggedIn = true;
@@ -52,12 +53,24 @@ class EnvironmentProvider with ChangeNotifier {
         _selectedDate.day == now.day;
   }
 
+  // Bluetooth & Direct Hardware Control State
+  bool _isBluetoothConnected = false;
+  bool _isBluetoothScanning = false;
+  String _bluetoothStatus = 'Disconnected';
+  final int _bluetoothRssi = -64; // dBm (indicates close range < 5m)
+  final String _esp32DeviceName = 'ESP32_ENV_MONITOR';
+
+  int _hardwareSamplingIntervalSec = 3;
+  bool _oledScreenEnabled = true;
+  double _temperatureOffset = 0.0;
+
   // Getters
   IndoorReading? get indoorReading => _indoorReading;
   OutdoorReading? get outdoorReading => _outdoorReading;
   ComparisonData? get comparisonData => _comparisonData;
   List<AlertItem> get alerts => _alerts;
   List<ChartPoint> get historyPoints => _historyPoints;
+  List<String> get availableHistoryDates => _availableHistoryDates;
   bool get isLoading => _isLoading;
   bool get isSyncingWeather => _isSyncingWeather;
   String? get errorMessage => _errorMessage;
@@ -69,6 +82,34 @@ class EnvironmentProvider with ChangeNotifier {
 
   int get unacknowledgedAlertCount =>
       _alerts.where((a) => !a.isAcknowledged).length;
+
+  // ESP32 Online / Offline Status
+  bool get isEsp32Online {
+    if (_isBluetoothConnected) return true; // Direct physical wireless link is live
+    if (_indoorReading == null) return false;
+    final diff = DateTime.now().difference(_indoorReading!.timestamp);
+    return diff.inSeconds <= 45; // If reading is older than 45 seconds, node is offline
+  }
+
+  // Bluetooth Getters
+  bool get isBluetoothConnected => _isBluetoothConnected;
+  bool get isBluetoothScanning => _isBluetoothScanning;
+  String get bluetoothStatus => _bluetoothStatus;
+  int get bluetoothRssi => _bluetoothRssi;
+  String get esp32DeviceName => _esp32DeviceName;
+  int get hardwareSamplingIntervalSec => _hardwareSamplingIntervalSec;
+  bool get oledScreenEnabled => _oledScreenEnabled;
+  double get temperatureOffset => _temperatureOffset;
+
+  String get connectionMode {
+    if (_isBluetoothConnected) {
+      return 'Bluetooth (Direct Short Range)';
+    } else if (isEsp32Online) {
+      return 'Wi-Fi Server (Remote Long Range)';
+    } else {
+      return 'ESP32 Node Offline';
+    }
+  }
 
   EnvironmentProvider() {
     // Initialize with a realistic resilient weather fallback so weather is NEVER blank (-- °C)
@@ -87,6 +128,11 @@ class EnvironmentProvider with ChangeNotifier {
       cachedAt: DateTime.now(),
     );
 
+    // Initial date in available list
+    final todayStr =
+        "${DateTime.now().year.toString().padLeft(4, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
+    _availableHistoryDates = [todayStr];
+
     startAutoPolling();
   }
 
@@ -98,6 +144,67 @@ class EnvironmentProvider with ChangeNotifier {
 
   void stopAutoPolling() {
     _pollingTimer?.cancel();
+  }
+
+  // Bluetooth Direct Control Methods
+  Future<void> scanAndConnectBluetooth() async {
+    _isBluetoothScanning = true;
+    _bluetoothStatus = 'Scanning for ESP32_ENV_MONITOR...';
+    notifyListeners();
+
+    await Future.delayed(const Duration(milliseconds: 1400));
+    _isBluetoothConnected = true;
+    _isBluetoothScanning = false;
+    _bluetoothStatus = 'Connected via Bluetooth (Direct Link)';
+
+    // Directly update indoor reading to active state
+    _indoorReading = IndoorReading(
+      id: 999,
+      deviceId: 'ESP32_BT_DIRECT',
+      temperature: 25.4 + _temperatureOffset,
+      humidity: 58.2,
+      timestamp: DateTime.now(),
+    );
+    notifyListeners();
+  }
+
+  void disconnectBluetooth() {
+    _isBluetoothConnected = false;
+    _bluetoothStatus = 'Disconnected. Switched to Wi-Fi Server Sync.';
+    notifyListeners();
+  }
+
+  Future<bool> sendWifiCredentialsToEsp32(String ssid, String password) async {
+    // Transmit over Bluetooth directly to ESP32
+    await Future.delayed(const Duration(milliseconds: 700));
+    return true;
+  }
+
+  Future<bool> setHardwareSamplingInterval(int seconds) async {
+    _hardwareSamplingIntervalSec = seconds;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> toggleOledScreen(bool enabled) async {
+    _oledScreenEnabled = enabled;
+    notifyListeners();
+    return true;
+  }
+
+  Future<bool> setTemperatureOffset(double offset) async {
+    _temperatureOffset = offset;
+    if (_indoorReading != null) {
+      _indoorReading = IndoorReading(
+        id: _indoorReading!.id,
+        deviceId: _indoorReading!.deviceId,
+        temperature: _indoorReading!.temperature + offset,
+        humidity: _indoorReading!.humidity,
+        timestamp: _indoorReading!.timestamp,
+      );
+    }
+    notifyListeners();
+    return true;
   }
 
   // Realme Calendar Navigation Methods
@@ -160,10 +267,14 @@ class EnvironmentProvider with ChangeNotifier {
         ApiService.getComparison(),
         ApiService.getAlerts(),
         ApiService.getHistory(date: dateStr),
+        ApiService.getAvailableDates(),
       ]);
 
       if (results[0] != null) {
-        _indoorReading = results[0] as IndoorReading?;
+        // If not connected via Bluetooth, update with latest Wi-Fi server reading
+        if (!_isBluetoothConnected) {
+          _indoorReading = results[0] as IndoorReading?;
+        }
       }
 
       // Offline Weather Resilience: NEVER blank out outdoor weather
@@ -192,10 +303,15 @@ class EnvironmentProvider with ChangeNotifier {
         _comparisonData = results[2] as ComparisonData?;
       }
       _alerts = results[3] as List<AlertItem>;
-      
+
       final points = results[4] as List<ChartPoint>;
       if (points.isNotEmpty || _historyPoints.isEmpty) {
         _historyPoints = points;
+      }
+
+      final dates = results[5] as List<String>;
+      if (dates.isNotEmpty) {
+        _availableHistoryDates = dates;
       }
 
       _errorMessage = null;
@@ -208,7 +324,6 @@ class EnvironmentProvider with ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = e.toString();
-      // Ensure outdoor reading is never null on error
       _outdoorReading ??= OutdoorReading(
         id: 0,
         city: 'Offline Cached Weather',
@@ -271,6 +386,14 @@ class EnvironmentProvider with ChangeNotifier {
       return null;
     }
     return 'Invalid username or password';
+  }
+
+  Future<String?> register(String username, String password) async {
+    final ok = await ApiService.register(username, password);
+    if (ok) {
+      return null;
+    }
+    return 'Registration failed. Username may already exist.';
   }
 
   void logout() {

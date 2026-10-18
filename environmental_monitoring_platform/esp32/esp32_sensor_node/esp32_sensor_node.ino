@@ -1,6 +1,6 @@
 /*
  * ==============================================================================
- * Integrated Environmental Monitoring Platform - Hardware Sensing Node
+ * Integrated Environmental Monitoring Platform - Dual-Mode Hardware Sensing Node
  * ==============================================================================
  * Author : Mohammed Irfan KS
  * Roll No: KCMIT25MCA-2011
@@ -11,10 +11,15 @@
  *   - DHT22 Temperature & Humidity Sensor (Data: GPIO 4)
  *   - 0.96-inch I2C OLED Display SSD1306 (SDA: GPIO 21, SCL: GPIO 22)
  *
- * Network Strategy:
- *   - Connects to Mobile Phone Hotspot (2.4 GHz).
- *   - Automatically targets the phone's Gateway IP on port 8080 via WiFi.gatewayIP().
- *   - Eliminates hardcoded IP mismatches across different phone brands.
+ * Dual Connectivity Strategy:
+ *   1. SHORT RANGE (Bluetooth Serial "ESP32_ENV_MONITOR"):
+ *      - Direct peer-to-peer connection with phone app.
+ *      - Direct low-latency sensor streaming (0ms delay).
+ *      - Hardware control & dynamic Wi-Fi provisioning (SSID/Password).
+ *   2. LONG RANGE (Wi-Fi STA + HTTP Client):
+ *      - Connects to Wi-Fi exclusively for background data synchronization.
+ *      - Uploads telemetry to Central Backend Server (POST /api/indoor/reading).
+ *      - Enables remote monitoring on the app even when far away.
  * ==============================================================================
  */
 
@@ -25,16 +30,21 @@
 #include <Adafruit_SSD1306.h>
 #include <DHT.h>
 #include <ArduinoJson.h>
+#include "BluetoothSerial.h"
+#include <Preferences.h>
 
 // ==============================================================================
-// 1. Wi-Fi Configuration
+// 1. Dual-Connectivity Objects & Settings
 // ==============================================================================
-// Change these to match your Phone's Hotspot exactly:
-const char* WIFI_SSID     = "Irfan";          // Your phone hotspot name
-const char* WIFI_PASSWORD = "password123";    // Your phone hotspot password
+BluetoothSerial SerialBT;
+Preferences preferences;
 
-const char* DEVICE_ID     = "esp32_node_01";
-const unsigned long POST_INTERVAL_MS = 3000; // Send reading every 3 seconds
+// Dynamic Wi-Fi credentials stored in flash NVS
+String wifi_ssid     = "Irfan";
+String wifi_password = "password123";
+String device_id     = "esp32_node_01";
+unsigned long post_interval_ms = 3000;
+bool oled_enabled    = true;
 
 // ==============================================================================
 // 2. Hardware Pinout
@@ -50,22 +60,34 @@ DHT dht(DHTPIN, DHTTYPE);
 Adafruit_SSD1306 display(SCREEN_WIDTH, SCREEN_HEIGHT, &Wire, OLED_RESET);
 
 unsigned long lastPostTime = 0;
-String postStatus = "Init...";
+String statusLine = "Init...";
 
 // ==============================================================================
 // OLED Display Helper
 // ==============================================================================
 void updateOled(float temp, float hum, String status) {
+  if (!oled_enabled) {
+    display.clearDisplay();
+    display.display();
+    return;
+  }
+
   display.clearDisplay();
   
-  // Header
+  // Header with Connection Mode
   display.setTextSize(1);
   display.setTextColor(SSD1306_WHITE);
   display.setCursor(0, 0);
-  display.print("ENV MONITOR [ESP32]");
+  if (SerialBT.hasClient()) {
+    display.print("ENV [BT LINK ACTIVE]");
+  } else if (WiFi.status() == WL_CONNECTED) {
+    display.print("ENV [WIFI CLOUD]");
+  } else {
+    display.print("ENV [OFFLINE STANDBY]");
+  }
   display.drawLine(0, 9, 127, 9, SSD1306_WHITE);
 
-  // Temperature (Big Font)
+  // Temperature
   display.setCursor(0, 14);
   display.print("Temp: ");
   display.setTextSize(2);
@@ -73,7 +95,7 @@ void updateOled(float temp, float hum, String status) {
   display.setTextSize(1);
   display.print(" C");
 
-  // Humidity (Big Font)
+  // Humidity
   display.setCursor(0, 34);
   display.print("Hum:  ");
   display.setTextSize(2);
@@ -93,99 +115,125 @@ void updateOled(float temp, float hum, String status) {
 // Wi-Fi Connection Routine
 // ==============================================================================
 void connectToWiFi() {
-  display.clearDisplay();
-  display.setTextSize(1);
-  display.setCursor(0, 5);
-  display.println("Connecting Hotspot:");
-  display.println(WIFI_SSID);
-  display.display();
+  if (wifi_ssid.length() == 0) return;
 
+  Serial.println("[WiFi] Connecting to: " + wifi_ssid);
   WiFi.mode(WIFI_STA);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  WiFi.begin(wifi_ssid.c_str(), wifi_password.c_str());
 
   int attempts = 0;
-  while (WiFi.status() != WL_CONNECTED && attempts < 25) {
-    delay(500);
+  while (WiFi.status() != WL_CONNECTED && attempts < 15) {
+    delay(400);
     Serial.print(".");
-    display.print(".");
-    display.display();
     attempts++;
   }
 
-  display.clearDisplay();
-  display.setCursor(0, 5);
   if (WiFi.status() == WL_CONNECTED) {
     Serial.println("\n[WiFi] Connected successfully!");
     Serial.print("[WiFi] ESP32 IP: ");
     Serial.println(WiFi.localIP());
-    Serial.print("[WiFi] Gateway (Phone) IP: ");
-    Serial.println(WiFi.gatewayIP());
-
-    display.println("WiFi Connected!");
-    display.println();
-    display.print("ESP:  ");
-    display.println(WiFi.localIP().toString());
-    display.print("Host: ");
-    display.println(WiFi.gatewayIP().toString());
+    statusLine = "WiFi: " + WiFi.localIP().toString();
   } else {
-    Serial.println("\n[WiFi] Connection failed. Retrying...");
-    display.println("WiFi Failed!");
-    display.println("Check 2.4GHz Hotspot");
+    Serial.println("\n[WiFi] Connection failed. Using Bluetooth fallback.");
+    statusLine = "WiFi Standby (Use BT)";
   }
-  display.display();
-  delay(2000);
 }
 
 // ==============================================================================
-// HTTP Data Transmission Routine
+// HTTP Data Upload to Server (Long Range Sync)
 // ==============================================================================
-void sendData(float temp, float hum) {
+void uploadToServer(float temp, float hum) {
   if (WiFi.status() != WL_CONNECTED) {
-    connectToWiFi();
-    if (WiFi.status() != WL_CONNECTED) {
-      postStatus = "WiFi Disconnected";
-      return;
-    }
+    return;
   }
 
-  // Automatically construct server URL using the phone's Gateway IP!
+  // Automatic target using Gateway IP on port 8080
   String serverUrl = "http://" + WiFi.gatewayIP().toString() + ":8080/api/indoor/reading";
 
   HTTPClient http;
   http.begin(serverUrl);
   http.addHeader("Content-Type", "application/json");
-  http.setTimeout(4000); // 4 second timeout
+  http.setTimeout(3000);
 
-  // Build JSON document compatible with both ArduinoJson v6 and v7
   #if ARDUINOJSON_VERSION_MAJOR >= 7
     JsonDocument doc;
   #else
     StaticJsonDocument<256> doc;
   #endif
 
-  doc["device_id"]   = DEVICE_ID;
+  doc["device_id"]   = device_id;
   doc["temperature"] = serialized(String(temp, 1));
   doc["humidity"]    = serialized(String(hum, 1));
 
   String payload;
   serializeJson(doc, payload);
 
-  Serial.println("[HTTP] Target: " + serverUrl);
-  Serial.println("[HTTP] Sending: " + payload);
-
   int httpCode = http.POST(payload);
-  if (httpCode > 0) {
-    Serial.printf("[HTTP] Response Code: %d\n", httpCode);
-    if (httpCode == 200 || httpCode == 201) {
-      postStatus = "POST OK [200]";
-    } else {
-      postStatus = "HTTP " + String(httpCode);
-    }
+  if (httpCode == 200 || httpCode == 201) {
+    statusLine = "Server Sync OK [200]";
   } else {
-    Serial.printf("[HTTP] POST Error: %s\n", http.errorToString(httpCode).c_str());
-    postStatus = "Net Err " + String(httpCode) + " (Check Server)";
+    statusLine = "Sync Code: " + String(httpCode);
   }
   http.end();
+}
+
+// ==============================================================================
+// Bluetooth Command Processor (Direct Hardware Control & Wi-Fi Provisioning)
+// ==============================================================================
+void handleBluetoothCommands() {
+  if (!SerialBT.available()) return;
+
+  String line = SerialBT.readStringUntil('\n');
+  line.trim();
+  if (line.length() == 0) return;
+
+  Serial.println("[BT CMD] Received: " + line);
+
+  #if ARDUINOJSON_VERSION_MAJOR >= 7
+    JsonDocument doc;
+  #else
+    StaticJsonDocument<512> doc;
+  #endif
+
+  DeserializationError err = deserializeJson(doc, line);
+  if (err) {
+    SerialBT.println("{\"error\":\"Invalid JSON\"}");
+    return;
+  }
+
+  const char* cmd = doc["cmd"] | "";
+
+  // 1. Wi-Fi Provisioning via Bluetooth
+  if (strcmp(cmd, "set_wifi") == 0) {
+    const char* new_ssid = doc["ssid"] | "";
+    const char* new_pass = doc["pass"] | "";
+
+    wifi_ssid = String(new_ssid);
+    wifi_password = String(new_pass);
+
+    // Save permanently to NVS
+    preferences.putString("ssid", wifi_ssid);
+    preferences.putString("pass", wifi_password);
+
+    SerialBT.println("{\"status\":\"ok\",\"message\":\"WiFi credentials updated. Reconnecting...\"}");
+    connectToWiFi();
+  }
+  // 2. Hardware Sampling Rate Adjustment
+  else if (strcmp(cmd, "set_interval") == 0) {
+    int interval = doc["val"] | 3000;
+    post_interval_ms = (unsigned long)interval;
+    preferences.putInt("interval", interval);
+    SerialBT.println("{\"status\":\"ok\",\"message\":\"Sampling interval updated\"}");
+  }
+  // 3. OLED Display Power Toggle
+  else if (strcmp(cmd, "set_oled") == 0) {
+    oled_enabled = doc["val"] | true;
+    SerialBT.println("{\"status\":\"ok\",\"message\":\"OLED power updated\"}");
+  }
+  // 4. Ping / Status Request
+  else if (strcmp(cmd, "ping") == 0) {
+    SerialBT.println("{\"status\":\"pong\",\"device\":\"ESP32_ENV_MONITOR\",\"wifi\":true}");
+  }
 }
 
 // ==============================================================================
@@ -195,20 +243,34 @@ void setup() {
   Serial.begin(115200);
   delay(500);
 
-  // Initialize I2C OLED (SDA=21, SCL=22)
+  // Initialize NVS Preferences
+  preferences.begin("env_config", false);
+  wifi_ssid     = preferences.getString("ssid", "Irfan");
+  wifi_password = preferences.getString("pass", "password123");
+  post_interval_ms = (unsigned long)preferences.getInt("interval", 3000);
+
+  // 1. Initialize Bluetooth Serial (Primary Direct Link)
+  SerialBT.begin("ESP32_ENV_MONITOR");
+  Serial.println("[Bluetooth] Initialized as 'ESP32_ENV_MONITOR'");
+
+  // 2. Initialize OLED Display (SDA=21, SCL=22)
   Wire.begin(21, 22);
-  if (!display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDR)) {
-    Serial.println("[OLED] SSD1306 initialization failed. Check wiring!");
-  } else {
+  if (display.begin(SSD1306_SWITCHCAPVCC, SCREEN_ADDR)) {
     display.clearDisplay();
+    display.setTextSize(1);
+    display.setTextColor(SSD1306_WHITE);
+    display.setCursor(0, 10);
+    display.println("ESP32 Dual-Mode Node");
+    display.println("BT: ESP32_ENV_MONITOR");
+    display.println("Connecting WiFi...");
     display.display();
   }
 
-  // Initialize DHT22
+  // 3. Initialize DHT22
   dht.begin();
   Serial.println("[DHT22] Initialized on GPIO 4");
 
-  // Connect to Hotspot
+  // 4. Connect to Wi-Fi for Long-Range Sync
   connectToWiFi();
 }
 
@@ -216,29 +278,40 @@ void setup() {
 // Main Loop
 // ==============================================================================
 void loop() {
-  unsigned long currentMillis = millis();
+  // Always listen for direct Bluetooth commands
+  handleBluetoothCommands();
 
-  if (currentMillis - lastPostTime >= POST_INTERVAL_MS || lastPostTime == 0) {
+  unsigned long currentMillis = millis();
+  if (currentMillis - lastPostTime >= post_interval_ms || lastPostTime == 0) {
     lastPostTime = currentMillis;
 
     float hum  = dht.readHumidity();
-    float temp = dht.readTemperature(); // Celsius
+    float temp = dht.readTemperature();
 
     if (isnan(hum) || isnan(temp)) {
-      Serial.println("[Sensor] Error reading from DHT22!");
-      postStatus = "DHT22 Error";
-      updateOled(0.0, 0.0, postStatus);
+      statusLine = "DHT22 Read Err";
+      updateOled(0.0, 0.0, statusLine);
       return;
     }
 
-    Serial.printf("[Sensor] Temp: %.1f C | Hum: %.1f %%\n", temp, hum);
+    Serial.printf("[Telemetry] Temp: %.1f C | Hum: %.1f %%\n", temp, hum);
 
-    // Send data to backend running on the phone
-    sendData(temp, hum);
+    // MODE 1: Bluetooth Broadcast (If phone is in close proximity)
+    if (SerialBT.hasClient()) {
+      SerialBT.printf("{\"device\":\"%s\",\"temp\":%.1f,\"hum\":%.1f}\n", device_id.c_str(), temp, hum);
+      statusLine = "BT Direct Link Active";
+    }
 
-    // Refresh OLED
-    updateOled(temp, hum, postStatus);
+    // MODE 2: Long-Range Wi-Fi Sync (Upload to Central Server)
+    if (WiFi.status() == WL_CONNECTED) {
+      uploadToServer(temp, hum);
+    } else if (!SerialBT.hasClient()) {
+      statusLine = "Offline Standby";
+    }
+
+    // Refresh Local OLED
+    updateOled(temp, hum, statusLine);
   }
 
-  delay(50);
+  delay(30);
 }

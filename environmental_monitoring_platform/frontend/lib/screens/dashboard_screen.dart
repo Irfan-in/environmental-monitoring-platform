@@ -17,6 +17,7 @@ class DashboardScreen extends StatelessWidget {
     final indoor = env.indoorReading;
     final outdoor = env.outdoorReading;
     final comparison = env.comparisonData;
+    final isEsp32Online = env.isEsp32Online;
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
@@ -38,11 +39,48 @@ class DashboardScreen extends StatelessWidget {
           ],
         ),
         actions: [
-          // Single uncluttered Settings icon for all options & customizations
+          // 1. Bluetooth & Direct Hardware Control Icon
+          IconButton(
+            icon: Icon(
+              env.isBluetoothConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+              color: env.isBluetoothConnected
+                  ? const Color(0xFF38BDF8)
+                  : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+              size: 22,
+            ),
+            tooltip: env.isBluetoothConnected
+                ? 'Bluetooth Connected (Direct ESP32 Link)'
+                : 'Bluetooth & Hardware Control',
+            onPressed: () => _showBluetoothHardwareSheet(context, env),
+          ),
+
+          // 2. User & Authentication Icon (Topic for tomorrow's presentation)
+          IconButton(
+            icon: CircleAvatar(
+              radius: 13,
+              backgroundColor: env.isAdmin
+                  ? const Color(0xFF10B981)
+                  : (env.isLoggedIn ? const Color(0xFF38BDF8) : const Color(0xFF64748B)),
+              child: Icon(
+                env.isAdmin
+                    ? Icons.admin_panel_settings
+                    : (env.isLoggedIn ? Icons.person : Icons.person_outline),
+                size: 15,
+                color: Colors.white,
+              ),
+            ),
+            tooltip: env.isLoggedIn
+                ? '${env.username} (${env.userRole.toUpperCase()})'
+                : 'Log In / Register (User Management)',
+            onPressed: () => _showAuthSheet(context, env),
+          ),
+
+          // 3. Settings & Preferences Icon
           IconButton(
             icon: Icon(
               Icons.settings_outlined,
               color: isDark ? Colors.white : const Color(0xFF0F172A),
+              size: 22,
             ),
             tooltip: 'Settings & System Preferences',
             onPressed: () => _showSettingsSheet(context, env),
@@ -57,15 +95,84 @@ class DashboardScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              // Connection Status Banner
+              Container(
+                margin: const EdgeInsets.only(bottom: 14),
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : Colors.white,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(
+                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    Icon(
+                      env.isBluetoothConnected
+                          ? Icons.bluetooth_connected
+                          : (isEsp32Online ? Icons.wifi : Icons.wifi_off),
+                      size: 16,
+                      color: env.isBluetoothConnected
+                          ? const Color(0xFF38BDF8)
+                          : (isEsp32Online ? const Color(0xFF10B981) : const Color(0xFFEF4444)),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        env.connectionMode,
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                        ),
+                      ),
+                    ),
+                    if (env.isBluetoothConnected)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF38BDF8).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          '< 5m (Direct Link)',
+                          style: TextStyle(
+                            color: Color(0xFF38BDF8),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    else if (!isEsp32Online)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEF4444).withValues(alpha: 0.15),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: const Text(
+                          'Disconnected',
+                          style: TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+
               // Active Alerts Banner if alerts exist
               if (env.unacknowledgedAlertCount > 0)
                 Container(
                   margin: const EdgeInsets.only(bottom: 16),
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFEF4444).withOpacity(0.15),
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: const Color(0xFFEF4444).withOpacity(0.4)),
+                    border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
                   ),
                   child: Row(
                     children: [
@@ -98,23 +205,37 @@ class DashboardScreen extends StatelessWidget {
                       letterSpacing: 1.0,
                     ),
                   ),
+                  // Live indicator: Green when online, Red when offline
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF10B981).withOpacity(0.15),
+                      color: isEsp32Online
+                          ? const Color(0xFF10B981).withValues(alpha: 0.15)
+                          : const Color(0xFFEF4444).withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                        color: isEsp32Online
+                            ? const Color(0xFF10B981).withValues(alpha: 0.4)
+                            : const Color(0xFFEF4444).withValues(alpha: 0.4),
+                      ),
                     ),
                     child: Row(
                       mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Icon(Icons.circle, color: Color(0xFF10B981), size: 8),
+                        Icon(
+                          isEsp32Online ? Icons.circle : Icons.sensors_off,
+                          color: isEsp32Online ? const Color(0xFF10B981) : const Color(0xFFEF4444),
+                          size: 10,
+                        ),
                         const SizedBox(width: 5),
                         Text(
-                          indoor != null ? indoor.deviceId : 'ESP32 Node',
-                          style: const TextStyle(
-                            color: Color(0xFF10B981),
+                          isEsp32Online
+                              ? (indoor != null ? indoor.deviceId : 'ESP32 Online')
+                              : 'ESP32 OFFLINE',
+                          style: TextStyle(
+                            color: isEsp32Online ? const Color(0xFF10B981) : const Color(0xFFEF4444),
                             fontSize: 11,
-                            fontWeight: FontWeight.w600,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                       ],
@@ -124,37 +245,65 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // Indoor Metric Cards
+              // Indoor Metric Cards (Clear offline indication if ESP32 disconnected)
               Row(
                 children: [
                   Expanded(
                     child: MetricCard(
-                      title: 'Temperature',
-                      value: indoor != null ? indoor.temperature.toStringAsFixed(1) : '24.5',
+                      title: 'Indoor Temp',
+                      value: isEsp32Online && indoor != null
+                          ? indoor.temperature.toStringAsFixed(1)
+                          : '--',
                       unit: '°C',
                       icon: Icons.thermostat,
-                      accentColor: const Color(0xFFF87171),
-                      subtitle: indoor != null
+                      accentColor: isEsp32Online ? const Color(0xFFF87171) : const Color(0xFF64748B),
+                      subtitle: isEsp32Online && indoor != null
                           ? 'Updated ${DateFormat('HH:mm:ss').format(indoor.timestamp)}'
-                          : 'Live sensor reading',
+                          : 'Node Disconnected',
                     ),
                   ),
                   const SizedBox(width: 12),
                   Expanded(
                     child: MetricCard(
-                      title: 'Humidity',
-                      value: indoor != null ? indoor.humidity.toStringAsFixed(1) : '55.0',
+                      title: 'Indoor Humidity',
+                      value: isEsp32Online && indoor != null
+                          ? indoor.humidity.toStringAsFixed(1)
+                          : '--',
                       unit: '%',
                       icon: Icons.water_drop,
-                      accentColor: const Color(0xFF38BDF8),
-                      subtitle: 'Relative Humidity',
+                      accentColor: isEsp32Online ? const Color(0xFF38BDF8) : const Color(0xFF64748B),
+                      subtitle: isEsp32Online ? 'Relative Humidity' : 'Sensor Offline',
                     ),
                   ),
                 ],
               ),
+
+              // Clarification note if offline
+              if (!isEsp32Online)
+                Container(
+                  margin: const EdgeInsets.only(top: 8),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEF4444).withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: const Row(
+                    children: [
+                      Icon(Icons.info_outline, size: 14, color: Color(0xFFEF4444)),
+                      SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          'ESP32 hardware is offline. Outdoor weather data continues to display below.',
+                          style: TextStyle(color: Color(0xFFEF4444), fontSize: 11),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
               const SizedBox(height: 24),
 
-              // Section Header: Outdoor Weather
+              // Section Header: Outdoor Weather (ALWAYS ACTIVE & RESILIENT)
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -171,9 +320,9 @@ class DashboardScreen extends StatelessWidget {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                       decoration: BoxDecoration(
-                        color: const Color(0xFFF59E0B).withOpacity(0.18),
+                        color: const Color(0xFFF59E0B).withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(6),
-                        border: Border.all(color: const Color(0xFFF59E0B).withOpacity(0.5)),
+                        border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.5)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -203,7 +352,7 @@ class DashboardScreen extends StatelessWidget {
               ),
               const SizedBox(height: 10),
 
-              // Outdoor Metric Cards (Always resiliently populated)
+              // Outdoor Metric Cards (Always active and resilient)
               Row(
                 children: [
                   Expanded(
@@ -243,7 +392,7 @@ class DashboardScreen extends StatelessWidget {
                   ),
                   boxShadow: [
                     BoxShadow(
-                      color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                      color: isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -268,17 +417,21 @@ class DashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 10),
                     Text(
-                      comparison?.comfortAssessment ?? 'Comfortable (Optimal)',
-                      style: const TextStyle(
-                        color: Color(0xFF10B981),
+                      isEsp32Online
+                          ? (comparison?.comfortAssessment ?? 'Comfortable (Optimal)')
+                          : 'Indoor Sensor Offline',
+                      style: TextStyle(
+                        color: isEsp32Online ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      comparison?.statusSummary ??
-                          'Indoor climate is well-regulated compared to current outdoor conditions.',
+                      isEsp32Online
+                          ? (comparison?.statusSummary ??
+                              'Indoor climate is well-regulated compared to current outdoor conditions.')
+                          : 'Connect ESP32 via Bluetooth or Wi-Fi to calculate real-time differential.',
                       style: TextStyle(
                         color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                         fontSize: 13,
@@ -294,7 +447,562 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // Unified Settings Modal
+  // 1. Bluetooth & Direct Hardware Control Sheet
+  void _showBluetoothHardwareSheet(BuildContext context, EnvironmentProvider env) {
+    final ssidController = TextEditingController(text: 'Irfan');
+    final passController = TextEditingController(text: 'password123');
+    final isDark = env.isDarkMode;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        const Icon(Icons.bluetooth_audio, color: Color(0xFF38BDF8), size: 24),
+                        const SizedBox(width: 10),
+                        Text(
+                          'ESP32 Bluetooth Direct Control',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 18,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Primary connection for close-range communication, direct hardware control, and Wi-Fi provisioning.',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 13,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // Connection Status & Switch
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            env.isBluetoothConnected ? Icons.bluetooth_connected : Icons.bluetooth,
+                            color: env.isBluetoothConnected
+                                ? const Color(0xFF38BDF8)
+                                : const Color(0xFF94A3B8),
+                            size: 24,
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  env.isBluetoothConnected
+                                      ? 'Connected to ${env.esp32DeviceName}'
+                                      : 'Bluetooth Disconnected',
+                                  style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 14,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                Text(
+                                  env.isBluetoothConnected
+                                      ? 'Signal: ${env.bluetoothRssi} dBm (In Close Range)'
+                                      : 'Tap below to scan and connect directly',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Connect / Disconnect Action Button
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: env.isBluetoothConnected
+                              ? const Color(0xFFEF4444)
+                              : const Color(0xFF38BDF8),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: env.isBluetoothScanning
+                            ? const SizedBox(
+                                width: 16,
+                                height: 16,
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                              )
+                            : Icon(env.isBluetoothConnected ? Icons.bluetooth_disabled : Icons.bluetooth_searching),
+                        label: Text(
+                          env.isBluetoothScanning
+                              ? 'Scanning for ESP32...'
+                              : (env.isBluetoothConnected ? 'Disconnect Bluetooth (Use Wi-Fi)' : 'Connect via Bluetooth (Short Range)'),
+                          style: const TextStyle(fontWeight: FontWeight.bold),
+                        ),
+                        onPressed: () async {
+                          if (env.isBluetoothConnected) {
+                            env.disconnectBluetooth();
+                          } else {
+                            await env.scanAndConnectBluetooth();
+                          }
+                          setSheetState(() {});
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // Wi-Fi Provisioning over Bluetooth
+                    Text(
+                      'WI-FI CREDENTIAL PROVISIONING (OVER BLUETOOTH)',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Send Wi-Fi credentials to ESP32 via Bluetooth so it can upload data to the central server when out of range.',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: ssidController,
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        labelText: 'Wi-Fi Network Name (SSID)',
+                        prefixIcon: const Icon(Icons.wifi, size: 18),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: passController,
+                      obscureText: true,
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        labelText: 'Wi-Fi Password',
+                        prefixIcon: const Icon(Icons.lock, size: 18),
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: const Color(0xFF38BDF8),
+                          side: const BorderSide(color: Color(0xFF38BDF8)),
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                        ),
+                        icon: const Icon(Icons.send_to_mobile, size: 18),
+                        label: const Text('Send Wi-Fi to ESP32 over Bluetooth'),
+                        onPressed: () async {
+                          final ssid = ssidController.text.trim();
+                          final pass = passController.text.trim();
+                          if (ssid.isEmpty) return;
+                          await env.sendWifiCredentialsToEsp32(ssid, pass);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text('Wi-Fi credentials "$ssid" sent to ESP32 over Bluetooth!'),
+                              backgroundColor: const Color(0xFF10B981),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+
+                    const SizedBox(height: 20),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // Direct Hardware Settings
+                    Text(
+                      'HARDWARE CONTROLS (BLUETOOTH DIRECT)',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'OLED Display Power:',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontSize: 14,
+                          ),
+                        ),
+                        Switch(
+                          value: env.oledScreenEnabled,
+                          activeThumbColor: const Color(0xFF38BDF8),
+                          onChanged: (val) {
+                            env.toggleOledScreen(val);
+                            setSheetState(() {});
+                          },
+                        ),
+                      ],
+                    ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Sensor Sampling Rate:',
+                          style: TextStyle(
+                            color: isDark ? Colors.white : const Color(0xFF0F172A),
+                            fontSize: 14,
+                          ),
+                        ),
+                        DropdownButton<int>(
+                          value: env.hardwareSamplingIntervalSec,
+                          dropdownColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+                          style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                          items: const [
+                            DropdownMenuItem(value: 2, child: Text('2 Seconds (High)')),
+                            DropdownMenuItem(value: 3, child: Text('3 Seconds (Default)')),
+                            DropdownMenuItem(value: 5, child: Text('5 Seconds (Eco)')),
+                            DropdownMenuItem(value: 10, child: Text('10 Seconds (Power-Save)')),
+                          ],
+                          onChanged: (val) {
+                            if (val != null) {
+                              env.setHardwareSamplingInterval(val);
+                              setSheetState(() {});
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 2. User Authentication & RBAC Presentation Sheet
+  void _showAuthSheet(BuildContext context, EnvironmentProvider env) {
+    final userController = TextEditingController();
+    final passController = TextEditingController();
+    final isDark = env.isDarkMode;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: isDark ? const Color(0xFF1E293B) : Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 20,
+                right: 20,
+                top: 16,
+                bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        CircleAvatar(
+                          radius: 20,
+                          backgroundColor: env.isAdmin
+                              ? const Color(0xFF10B981)
+                              : (env.isLoggedIn ? const Color(0xFF38BDF8) : const Color(0xFF64748B)),
+                          child: Icon(
+                            env.isAdmin
+                                ? Icons.admin_panel_settings
+                                : (env.isLoggedIn ? Icons.person : Icons.person_outline),
+                            color: Colors.white,
+                          ),
+                        ),
+                        const SizedBox(width: 12),
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              env.isLoggedIn ? env.username : 'Guest (Unauthenticated)',
+                              style: TextStyle(
+                                color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                fontWeight: FontWeight.bold,
+                                fontSize: 17,
+                              ),
+                            ),
+                            Text(
+                              env.isLoggedIn
+                                  ? 'Role: ${env.userRole.toUpperCase()} (RBAC Verified)'
+                                  : 'Limited viewer mode',
+                              style: TextStyle(
+                                color: env.isAdmin
+                                    ? const Color(0xFF10B981)
+                                    : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        if (env.isLoggedIn)
+                          TextButton.icon(
+                            icon: const Icon(Icons.logout, size: 16, color: Color(0xFFEF4444)),
+                            label: const Text('Log Out', style: TextStyle(color: Color(0xFFEF4444), fontSize: 13)),
+                            onPressed: () {
+                              env.logout();
+                              Navigator.pop(ctx);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text('Logged out. Reverted to Guest mode.')),
+                              );
+                            },
+                          ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                    const SizedBox(height: 12),
+
+                    // Login / Registration Form
+                    Text(
+                      'USER AUTHENTICATION (PRESENTATION DEMO)',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                        fontWeight: FontWeight.bold,
+                        fontSize: 12,
+                        letterSpacing: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Demonstrate Role-Based Access Control (RBAC): Admin has full threshold and hardware rights, Viewer has read-only access.',
+                      style: TextStyle(
+                        color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                        fontSize: 12,
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+                    TextField(
+                      controller: userController,
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        labelText: 'Username',
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        prefixIcon: const Icon(Icons.person, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: passController,
+                      obscureText: true,
+                      style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
+                      decoration: InputDecoration(
+                        labelText: 'Password',
+                        filled: true,
+                        fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
+                        prefixIcon: const Icon(Icons.lock, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Quick Demo Fill Chips
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        ActionChip(
+                          avatar: const Icon(Icons.admin_panel_settings, size: 14, color: Color(0xFF10B981)),
+                          label: const Text('Admin Demo (admin/admin123)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            userController.text = 'admin';
+                            passController.text = 'admin123';
+                          },
+                        ),
+                        ActionChip(
+                          avatar: const Icon(Icons.person, size: 14, color: Color(0xFF38BDF8)),
+                          label: const Text('Viewer Demo (user/user123)', style: TextStyle(fontSize: 11)),
+                          onPressed: () {
+                            userController.text = 'user';
+                            passController.text = 'user123';
+                          },
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Log In and Register Buttons
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: const Color(0xFF38BDF8),
+                              foregroundColor: const Color(0xFF0F172A),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              final u = userController.text.trim();
+                              final p = passController.text.trim();
+                              if (u.isEmpty || p.isEmpty) return;
+                              final err = await env.login(u, p);
+                              if (!ctx.mounted) return;
+                              if (err == null) {
+                                Navigator.pop(ctx);
+                                if (!context.mounted) return;
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Successfully logged in as ${env.username} (${env.userRole.toUpperCase()})'),
+                                    backgroundColor: const Color(0xFF10B981),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
+                                );
+                              }
+                            },
+                            child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold)),
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: OutlinedButton(
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: const Color(0xFF38BDF8),
+                              side: const BorderSide(color: Color(0xFF38BDF8)),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                              padding: const EdgeInsets.symmetric(vertical: 12),
+                            ),
+                            onPressed: () async {
+                              final u = userController.text.trim();
+                              final p = passController.text.trim();
+                              if (u.isEmpty || p.isEmpty) return;
+                              final err = await env.register(u, p);
+                              if (!ctx.mounted) return;
+                              if (err == null) {
+                                await env.login(u, p);
+                                if (!context.mounted) return;
+                                Navigator.pop(ctx);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Registered and logged in as $u!'),
+                                    backgroundColor: const Color(0xFF10B981),
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text(err), backgroundColor: const Color(0xFFEF4444)),
+                                );
+                              }
+                            },
+                            child: const Text('Register'),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // 3. Settings & Preferences Sheet
   void _showSettingsSheet(BuildContext context, EnvironmentProvider env) {
     final isDark = env.isDarkMode;
     final serverController = TextEditingController(text: ApiService.baseUrl);
@@ -321,7 +1029,6 @@ class DashboardScreen extends StatelessWidget {
                   mainAxisSize: MainAxisSize.min,
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Handle bar
                     Center(
                       child: Container(
                         width: 40,
@@ -333,8 +1040,6 @@ class DashboardScreen extends StatelessWidget {
                       ),
                     ),
                     const SizedBox(height: 16),
-
-                    // Header
                     Row(
                       children: [
                         const Icon(Icons.tune, color: Color(0xFF38BDF8), size: 24),
@@ -351,7 +1056,7 @@ class DashboardScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Customize appearance, network connections, and system limits.',
+                      'Customize theme, backend network endpoint, alert bounds, and cloud backup.',
                       style: TextStyle(
                         color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
                         fontSize: 13,
@@ -361,7 +1066,7 @@ class DashboardScreen extends StatelessWidget {
                     Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     const SizedBox(height: 12),
 
-                    // 1. Theme Configuration
+                    // Theme Switcher
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -409,7 +1114,7 @@ class DashboardScreen extends StatelessWidget {
                     Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     const SizedBox(height: 12),
 
-                    // 2. Server URL & Presets
+                    // Backend Server Connection
                     Text(
                       'BACKEND SERVER CONNECTION',
                       style: TextStyle(
@@ -425,22 +1130,10 @@ class DashboardScreen extends StatelessWidget {
                       style: TextStyle(color: isDark ? Colors.white : const Color(0xFF0F172A)),
                       decoration: InputDecoration(
                         hintText: 'http://127.0.0.1:8080',
-                        hintStyle: TextStyle(
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                        ),
                         filled: true,
                         fillColor: isDark ? const Color(0xFF0F172A) : const Color(0xFFF1F5F9),
-                        prefixIcon: Icon(
-                          Icons.dns_outlined,
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                          size: 18,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(10),
-                          borderSide: BorderSide(
-                            color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
-                          ),
-                        ),
+                        prefixIcon: const Icon(Icons.dns_outlined, size: 18),
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
                         contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
                       ),
                     ),
@@ -450,21 +1143,15 @@ class DashboardScreen extends StatelessWidget {
                       children: [
                         ActionChip(
                           label: const Text('Localhost (Phone)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            serverController.text = 'http://127.0.0.1:8080';
-                          },
+                          onPressed: () => serverController.text = 'http://127.0.0.1:8080',
                         ),
                         ActionChip(
                           label: const Text('Emulator (10.0.2.2)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            serverController.text = 'http://10.0.2.2:8080';
-                          },
+                          onPressed: () => serverController.text = 'http://10.0.2.2:8080',
                         ),
                         ActionChip(
                           label: const Text('PC Hotspot (192.168.137.1)', style: TextStyle(fontSize: 11)),
-                          onPressed: () {
-                            serverController.text = 'http://192.168.137.1:8080';
-                          },
+                          onPressed: () => serverController.text = 'http://192.168.137.1:8080',
                         ),
                       ],
                     ),
@@ -495,51 +1182,14 @@ class DashboardScreen extends StatelessWidget {
                         },
                       ),
                     ),
+
                     const SizedBox(height: 16),
                     Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
                     const SizedBox(height: 12),
 
-                    // 3. Environmental Thresholds
+                    // Cloud Disaster Recovery
                     Text(
-                      'ALERT THRESHOLDS (ADMIN)',
-                      style: TextStyle(
-                        color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
-                        fontWeight: FontWeight.bold,
-                        fontSize: 12,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const CircleAvatar(
-                        radius: 16,
-                        backgroundColor: Color(0xFFF87171),
-                        child: Icon(Icons.thermostat, color: Colors.white, size: 16),
-                      ),
-                      title: Text(
-                        'Temperature Limits: 18°C - 32°C',
-                        style: TextStyle(
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      subtitle: Text(
-                        'Triggers automatic warnings if room exceeds safe boundaries.',
-                        style: TextStyle(
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          fontSize: 11,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-                    const SizedBox(height: 12),
-
-                    // 4. Cloud Backup & Disaster Recovery
-                    Text(
-                      'CLOUD BACKUP & DISASTER RECOVERY',
+                      'CLOUD BACKUP & RESTORE',
                       style: TextStyle(
                         color: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
                         fontWeight: FontWeight.bold,
@@ -600,33 +1250,6 @@ class DashboardScreen extends StatelessWidget {
                           ),
                         ),
                       ],
-                    ),
-                    const SizedBox(height: 16),
-
-                    // User session pill
-                    Center(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF10B981).withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 14),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Auto-Auth Active: ${env.username} (${env.userRole.toUpperCase()})',
-                              style: const TextStyle(
-                                color: Color(0xFF10B981),
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ),
                     const SizedBox(height: 10),
                   ],

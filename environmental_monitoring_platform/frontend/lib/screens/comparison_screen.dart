@@ -30,13 +30,119 @@ class ComparisonScreen extends StatelessWidget {
           ),
         ),
       ),
-      body: (indoor == null || outdoor == null)
-          ? Center(
-              child: Text(
-                'Waiting for both indoor and outdoor data to compare...',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                ),
+      body: (!env.isEsp32Online || indoor == null || outdoor == null)
+          ? SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFEF4444).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: const Color(0xFFEF4444).withValues(alpha: 0.4)),
+                    ),
+                    child: Column(
+                      children: [
+                        Icon(
+                          !env.isEsp32Online ? Icons.sensors_off_rounded : Icons.cloud_off_rounded,
+                          color: const Color(0xFFEF4444),
+                          size: 36,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          !env.isEsp32Online ? 'ESP32 Node Offline' : 'Weather Data Unavailable',
+                          style: const TextStyle(
+                            color: Color(0xFFEF4444),
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          !env.isEsp32Online
+                              ? 'Indoor vs outdoor differential analysis is paused until the ESP32 reconnects via Bluetooth or Wi-Fi.'
+                              : 'Outdoor weather data is currently unavailable. Waiting for sync.',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'CURRENT OUTDOOR CONDITIONS',
+                    style: TextStyle(
+                      color: Color(0xFFFB923C),
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.0,
+                    ),
+                  ),
+                  const SizedBox(height: 10),
+                  if (outdoor != null) ...[
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: theme.cardColor,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
+                        ),
+                      ),
+                      child: Column(
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(
+                                outdoor.city,
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 16,
+                                  color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                ),
+                              ),
+                              Text(
+                                outdoor.weatherDesc,
+                                style: const TextStyle(color: Color(0xFFFB923C), fontSize: 13),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 14),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceAround,
+                            children: [
+                              Column(
+                                children: [
+                                  const Text('Outdoor Temp', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${outdoor.temperature.toStringAsFixed(1)}°C',
+                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFFFB923C)),
+                                  ),
+                                ],
+                              ),
+                              Container(height: 30, width: 1, color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
+                              Column(
+                                children: [
+                                  const Text('Outdoor Humidity', style: TextStyle(fontSize: 11, color: Color(0xFF94A3B8))),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    '${outdoor.humidity.toStringAsFixed(1)}%',
+                                    style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: Color(0xFF38BDF8)),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ],
               ),
             )
           : SingleChildScrollView(
@@ -73,7 +179,7 @@ class ComparisonScreen extends StatelessWidget {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                          color: isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),
@@ -174,7 +280,7 @@ class ComparisonScreen extends StatelessWidget {
                       ),
                       boxShadow: [
                         BoxShadow(
-                          color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                          color: isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                           blurRadius: 8,
                           offset: const Offset(0, 4),
                         ),

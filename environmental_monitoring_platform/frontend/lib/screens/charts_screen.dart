@@ -133,7 +133,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                               decoration: BoxDecoration(
-                                color: const Color(0xFF10B981).withOpacity(0.18),
+                                color: const Color(0xFF10B981).withValues(alpha: 0.18),
                                 borderRadius: BorderRadius.circular(4),
                               ),
                               child: const Text(
@@ -248,7 +248,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                 ),
                 boxShadow: [
                   BoxShadow(
-                    color: isDark ? Colors.black.withOpacity(0.15) : Colors.black.withOpacity(0.04),
+                    color: isDark ? Colors.black.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.04),
                     blurRadius: 8,
                     offset: const Offset(0, 4),
                   ),
@@ -365,13 +365,15 @@ class _ChartsScreenState extends State<ChartsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  // Realme Header (Coral / Red Accent gradient like screenshot)
+                  // Realme Calendar Header (Cohesive Slate / Ocean Blue gradient matching app)
                   Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       gradient: LinearGradient(
-                        colors: [Color(0xFFFF5252), Color(0xFFFF6B6B)],
+                        colors: isDark
+                            ? [const Color(0xFF1E293B), const Color(0xFF0F172A)]
+                            : [const Color(0xFF0284C7), const Color(0xFF0369A1)],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
                       ),
@@ -419,9 +421,9 @@ class _ChartsScreenState extends State<ChartsScreen> {
                         ),
                         const SizedBox(height: 6),
                         // Weekday labels: Sun Mon Tue Wed Thu Fri Sat
-                        Row(
+                        const Row(
                           mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: const [
+                          children: [
                             _WeekdayHeader('Sun'),
                             _WeekdayHeader('Mon'),
                             _WeekdayHeader('Tue'),
@@ -454,11 +456,13 @@ class _ChartsScreenState extends State<ChartsScreen> {
                         }
                         final dayNumber = index - firstWeekday + 1;
                         final cellDate = DateTime(displayedMonth.year, displayedMonth.month, dayNumber);
+                        final cellDateStr = DateFormat('yyyy-MM-dd').format(cellDate);
                         final isSelected = cellDate.year == env.selectedDate.year &&
                             cellDate.month == env.selectedDate.month &&
                             cellDate.day == env.selectedDate.day;
                         final isFuture = cellDate.isAfter(today);
                         final isTodayCell = cellDate.isAtSameMomentAs(today);
+                        final hasRecordedData = env.availableHistoryDates.contains(cellDateStr);
 
                         return InkWell(
                           onTap: isFuture
@@ -472,7 +476,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
                             alignment: Alignment.center,
                             decoration: BoxDecoration(
                               color: isSelected
-                                  ? const Color(0xFF0EA5E9) // Vibrant blue matching Realme selection
+                                  ? const Color(0xFF0EA5E9)
                                   : Colors.transparent,
                               borderRadius: BorderRadius.circular(8),
                             ),
@@ -491,8 +495,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
                                             : (isDark ? Colors.white : const Color(0xFF0F172A))),
                                   ),
                                 ),
-                                // Indicator dot for recorded history
-                                if (!isFuture && !isSelected)
+                                // Indicator dot ONLY for dates with verified recorded telemetry
+                                if (hasRecordedData && !isSelected)
                                   Container(
                                     margin: const EdgeInsets.only(top: 2),
                                     width: 4,
@@ -772,8 +776,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                const Color(0xFF38BDF8).withOpacity(0.25),
-                const Color(0xFF38BDF8).withOpacity(0.0),
+                const Color(0xFF38BDF8).withValues(alpha: 0.25),
+                const Color(0xFF38BDF8).withValues(alpha: 0.0),
               ],
             ),
           ),
@@ -794,8 +798,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                const Color(0xFFFB923C).withOpacity(0.18),
-                const Color(0xFFFB923C).withOpacity(0.0),
+                const Color(0xFFFB923C).withValues(alpha: 0.18),
+                const Color(0xFFFB923C).withValues(alpha: 0.0),
               ],
             ),
           ),

@@ -50,6 +50,7 @@ def run_builtin_server(host="0.0.0.0", port=8080):
         get_thresholds,
         update_threshold,
         get_combined_history,
+        get_recorded_history_dates,
         get_user_by_username,
         create_user,
         export_database_backup,
@@ -115,11 +116,19 @@ def run_builtin_server(host="0.0.0.0", port=8080):
             elif path == "/api/indoor/latest":
                 reading = get_latest_indoor_reading()
                 if reading:
+                    is_online = False
+                    try:
+                        ts = datetime.fromisoformat(reading["timestamp"].replace("Z", "+00:00"))
+                        now_utc = datetime.now(timezone.utc)
+                        is_online = (now_utc - ts).total_seconds() <= 45
+                    except Exception:
+                        pass
+                    reading["is_online"] = is_online
                     self._set_headers(200)
                     self.wfile.write(json.dumps(reading).encode("utf-8"))
                 else:
-                    self._set_headers(404)
-                    self.wfile.write(json.dumps({"detail": "No readings yet"}).encode("utf-8"))
+                    self._set_headers(200)
+                    self.wfile.write(json.dumps({"detail": "No readings yet", "is_online": False}).encode("utf-8"))
 
             elif path == "/api/indoor/history":
                 hist = get_indoor_history(limit=50)
@@ -191,6 +200,11 @@ def run_builtin_server(host="0.0.0.0", port=8080):
                 raw = get_combined_history(limit=50, target_date=target_date)
                 self._set_headers(200)
                 self.wfile.write(json.dumps({"timeframe": "24h", "count": len(raw), "points": raw}).encode("utf-8"))
+
+            elif path == "/api/history/dates":
+                dates = get_recorded_history_dates()
+                self._set_headers(200)
+                self.wfile.write(json.dumps({"dates": dates}).encode("utf-8"))
 
             elif path == "/api/alerts":
                 unack = "unacknowledged_only" in query and query["unacknowledged_only"][0].lower() == "true"

@@ -262,9 +262,22 @@ def get_combined_history(limit: int = 50, target_date: Optional[str] = None) -> 
                 "indoor_humidity": None,
                 "outdoor_temperature": f["temperature"],
                 "outdoor_humidity": f["humidity"]
-            })
-
     return points
+
+
+def get_recorded_history_dates() -> List[str]:
+    """Retrieve distinct dates (YYYY-MM-DD) that have recorded sensor readings in SQLite."""
+    conn = get_connection()
+    cur = conn.execute("""
+        SELECT DISTINCT SUBSTR(timestamp, 1, 10) as date_str
+        FROM indoor_readings
+        UNION
+        SELECT DISTINCT SUBSTR(timestamp, 1, 10) as date_str
+        FROM outdoor_readings
+        ORDER BY date_str DESC
+    """)
+    rows = cur.fetchall()
+    return [r[0] for r in rows if r[0]]
 
 
 # ==========================================

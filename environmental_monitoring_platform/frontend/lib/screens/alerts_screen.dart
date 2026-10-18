@@ -87,11 +87,11 @@ class AlertsScreen extends StatelessWidget {
                     border: Border.all(
                       color: alert.isAcknowledged
                           ? (isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0))
-                          : const Color(0xFFEF4444).withOpacity(0.5),
+                          : const Color(0xFFEF4444).withValues(alpha: 0.5),
                     ),
                     boxShadow: [
                       BoxShadow(
-                        color: isDark ? Colors.black.withOpacity(0.12) : Colors.black.withOpacity(0.03),
+                        color: isDark ? Colors.black.withValues(alpha: 0.12) : Colors.black.withValues(alpha: 0.03),
                         blurRadius: 6,
                         offset: const Offset(0, 3),
                       ),
@@ -213,8 +213,8 @@ class AlertsScreen extends StatelessWidget {
         context: context,
         builder: (ctx) => AlertDialog(
           backgroundColor: const Color(0xFF1E293B),
-          title: Row(
-            children: const [
+          title: const Row(
+            children: [
               Icon(Icons.lock_outline, color: Color(0xFFF59E0B)),
               SizedBox(width: 8),
               Text('Admin Access Required', style: TextStyle(color: Colors.white, fontSize: 16)),

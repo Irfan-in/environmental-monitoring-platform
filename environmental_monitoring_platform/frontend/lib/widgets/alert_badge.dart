@@ -16,7 +16,7 @@ class AlertBadge extends StatelessWidget {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         decoration: BoxDecoration(
-          color: const Color(0xFF10B981).withOpacity(0.15),
+          color: const Color(0xFF10B981).withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(6),
         ),
         child: const Text(
@@ -36,9 +36,9 @@ class AlertBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: color.withOpacity(0.3)),
+        border: Border.all(color: color.withValues(alpha: 0.3)),
       ),
       child: Text(
         isHigh ? 'CRITICAL HIGH' : 'WARNING LOW',

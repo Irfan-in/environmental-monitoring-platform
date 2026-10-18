@@ -197,4 +197,21 @@ class ApiService {
       return false;
     }
   }
+
+  // 13. Available History Dates
+  static Future<List<String>> getAvailableDates() async {
+    try {
+      final res = await http.get(Uri.parse('$baseUrl/api/history/dates'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        final list = data['dates'] as List? ?? [];
+        return list.map((e) => e.toString()).toList();
+      }
+      return [];
+    } catch (e) {
+      print('[ApiService] getAvailableDates error: $e');
+      return [];
+    }
+  }
 }
+

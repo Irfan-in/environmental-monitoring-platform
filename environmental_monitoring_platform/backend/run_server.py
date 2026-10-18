@@ -27,8 +27,8 @@ def run_fastapi_server(host="0.0.0.0", port=8080):
     print(f"  [FastAPI Engine] Starting ASGI Server at http://{host}:{port}")
     print(f"  Interactive Docs (Swagger) : http://localhost:{port}/docs")
     print(f"  Interactive Dashboard UI   : http://localhost:{port}/")
-    print(f"=======================================================\n")
-    uvicorn.run("app.main:app", host=host, port=port, reload=True)
+    is_render = bool(os.getenv("RENDER"))
+    uvicorn.run("app.main:app", host=host, port=port, reload=not is_render)
 
 
 def run_builtin_server(host="0.0.0.0", port=8080):

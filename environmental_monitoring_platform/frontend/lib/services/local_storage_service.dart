@@ -173,7 +173,30 @@ class LocalStorageService {
     }
   }
 
+  static const String _themeModeKey = 'app_theme_mode';
+  static const String _accentColorKey = 'app_accent_color_index';
+
   // --- Auth & Session Persistence ---
+
+  static Future<String?> getSavedThemeMode() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getString(_themeModeKey);
+  }
+
+  static Future<void> saveThemeMode(String mode) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_themeModeKey, mode);
+  }
+
+  static Future<int?> getSavedAccentColorIndex() async {
+    final prefs = await SharedPreferences.getInstance();
+    return prefs.getInt(_accentColorKey);
+  }
+
+  static Future<void> saveAccentColorIndex(int index) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_accentColorKey, index);
+  }
 
   static Future<bool> isUserLoggedIn() async {
     final prefs = await SharedPreferences.getInstance();

@@ -1,3 +1,4 @@
+import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:environmental_monitoring_platform/providers/environment_provider.dart';
@@ -86,22 +87,28 @@ class _MainShellScreenState extends State<MainShellScreen> {
     }
 
     return Scaffold(
+      extendBody: true,
       body: _screens[_currentIndex],
-      bottomNavigationBar: Container(
-        decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: wx.textDim.withValues(alpha: 0.15), width: 0.5),
-          ),
-        ),
-        child: BottomNavigationBar(
-          currentIndex: _currentIndex,
-          onTap: (i) => setState(() => _currentIndex = i),
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: wx.card,
-          selectedItemColor: wx.accent,
-          unselectedItemColor: wx.textDim,
-          selectedFontSize: 12,
-          unselectedFontSize: 11,
+      bottomNavigationBar: ClipRect(
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
+          child: Container(
+            decoration: BoxDecoration(
+              color: wx.card,
+              border: Border(
+                top: BorderSide(color: wx.cardBorder, width: 0.8),
+              ),
+            ),
+            child: BottomNavigationBar(
+              currentIndex: _currentIndex,
+              onTap: (i) => setState(() => _currentIndex = i),
+              type: BottomNavigationBarType.fixed,
+              backgroundColor: Colors.transparent,
+              elevation: 0,
+              selectedItemColor: wx.accent,
+              unselectedItemColor: wx.textDim,
+              selectedFontSize: 12,
+              unselectedFontSize: 11,
           items: [
             const BottomNavigationBarItem(
               icon: Icon(Icons.dashboard_outlined),
@@ -134,6 +141,8 @@ class _MainShellScreenState extends State<MainShellScreen> {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 }

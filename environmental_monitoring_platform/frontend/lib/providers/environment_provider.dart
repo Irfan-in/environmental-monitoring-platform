@@ -7,6 +7,7 @@ import '../models/alert_item.dart';
 import '../models/chart_point.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import '../theme/wx_style.dart';
 
 class EnvironmentProvider with ChangeNotifier {
   IndoorReading? _indoorReading;
@@ -31,20 +32,32 @@ class EnvironmentProvider with ChangeNotifier {
   ThemeMode get themeMode => _themeMode;
   bool get isDarkMode => _themeMode == ThemeMode.dark;
 
+  WxAccentTheme _accentTheme = WxAccentTheme.purple;
+  WxAccentTheme get accentTheme => _accentTheme;
+
   void setThemeMode(ThemeMode mode) {
     if (_themeMode != mode) {
       _themeMode = mode;
+      LocalStorageService.saveThemeMode(mode.name);
       notifyListeners();
     }
   }
 
   void toggleTheme() {
-    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
-    notifyListeners();
+    final next = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
+    setThemeMode(next);
   }
 
   void setDarkMode(bool value) {
     setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
+  }
+
+  void setAccentTheme(WxAccentTheme theme) {
+    if (_accentTheme != theme) {
+      _accentTheme = theme;
+      LocalStorageService.saveAccentColorIndex(theme.index);
+      notifyListeners();
+    }
   }
 
   // User Auth State
@@ -165,6 +178,23 @@ class EnvironmentProvider with ChangeNotifier {
     _username = await LocalStorageService.getUsername();
     _userRole = await LocalStorageService.getUserRole();
     _localRecordCount = await LocalStorageService.getLocalRecordCount();
+
+    // Restore permanent theme & accent color preferences
+    final savedMode = await LocalStorageService.getSavedThemeMode();
+    if (savedMode != null) {
+      if (savedMode == ThemeMode.light.name) {
+        _themeMode = ThemeMode.light;
+      } else if (savedMode == ThemeMode.system.name) {
+        _themeMode = ThemeMode.system;
+      } else {
+        _themeMode = ThemeMode.dark;
+      }
+    }
+
+    final savedAccent = await LocalStorageService.getSavedAccentColorIndex();
+    if (savedAccent != null && savedAccent >= 0 && savedAccent < WxAccentTheme.values.length) {
+      _accentTheme = WxAccentTheme.values[savedAccent];
+    }
 
     // Pre-load local telemetry history for today (dropping any future-skewed entries)
     final now = DateTime.now();

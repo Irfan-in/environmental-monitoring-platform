@@ -45,14 +45,12 @@ class _DashboardScreenState extends State<DashboardScreen> {
                     const SizedBox(height: 12),
                   ],
                   WxChips(
-                    labels: const ['Indoor', 'Outdoor', 'Compare'],
-                    index: _view,
+                    labels: const ['Indoor', 'Outdoor'],
+                    index: _view.clamp(0, 1),
                     onChanged: (i) => setState(() => _view = i),
                   ),
                   const SizedBox(height: 12),
                   _tileGrid(_tiles(env, points)),
-                  const SizedBox(height: 12),
-                  _recentCard(wx, env, points),
                   const SizedBox(height: 12),
                   _trendCard(wx, env, points),
                   const SizedBox(height: 12),
@@ -101,27 +99,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
     return '${s ~/ 3600}h ago';
   }
 
-  double? _pick(ChartPoint p) {
-    switch (_view) {
-      case 1:
-        return p.outdoorTemperature;
-      case 2:
-        {
-          final a = p.indoorTemperature;
-          final b = p.outdoorTemperature;
-          return (a != null && b != null) ? a - b : null;
-        }
-      default:
-        return p.indoorTemperature;
-    }
-  }
 
-  List<ChartPoint> _sample(List<ChartPoint> pts, int n) {
-    if (pts.length <= n) return pts;
-    return [
-      for (var i = 0; i < n; i++) pts[(i * (pts.length - 1) / (n - 1)).round()],
-    ];
-  }
 
   // ── sections ───────────────────────────────────────────────────────────────
 
@@ -270,59 +248,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _recentCard(Wx wx, EnvironmentProvider env, List<ChartPoint> pts) {
-    final samples = _sample(pts, 6);
-    final icon = _view == 1
-        ? Icons.cloud_outlined
-        : (_view == 2 ? Icons.swap_vert : Icons.thermostat);
 
-    return WxCard(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const WxCardTitle(icon: Icons.history, title: 'Recent readings'),
-          const SizedBox(height: 14),
-          if (!env.isSelectedDateToday)
-            _archiveNote(wx, env)
-          else if (samples.isEmpty)
-            Text('Sensor readings will appear here once connected.',
-                style: wx.t(13, c: wx.textDim))
-          else
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                for (var i = 0; i < samples.length; i++)
-                  Builder(builder: (_) {
-                    final v = _pick(samples[i]);
-                    final label = i == samples.length - 1
-                        ? 'Now'
-                        : DateFormat('HH:mm').format(samples[i].timestamp.toLocal());
-                    final text = v == null
-                        ? '--'
-                        : (_view == 2 && v >= 0
-                            ? '+${v.toStringAsFixed(1)}°'
-                            : '${v.toStringAsFixed(1)}°');
-                    return Column(
-                      children: [
-                        Text(label, style: wx.t(11, c: wx.textDim)),
-                        const SizedBox(height: 8),
-                        WxIconDot(icon: icon, size: 30),
-                        const SizedBox(height: 8),
-                        Text(text, style: wx.t(14, w: FontWeight.w500)),
-                      ],
-                    );
-                  }),
-              ],
-            ),
-        ],
-      ),
-    );
-  }
 
   Widget _trendCard(Wx wx, EnvironmentProvider env, List<ChartPoint> pts) {
-    final title = _view == 0
-        ? 'Indoor trend'
-        : (_view == 1 ? 'Outdoor trend' : 'Comparison trend');
+    final title = _view == 0 ? 'Indoor trend' : 'Outdoor trend';
     return WxCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -335,20 +264,10 @@ class _DashboardScreenState extends State<DashboardScreen> {
             WxTrendChart(
               points: pts,
               temperature: true,
-              showIndoor: _view != 1,
-              showOutdoor: _view != 0,
+              showIndoor: _view == 0,
+              showOutdoor: _view == 1,
               height: 170,
             ),
-            if (_view == 2) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  WxLegendDot(color: wx.accent, label: 'Indoor'),
-                  const SizedBox(width: 16),
-                  WxLegendDot(color: wx.outdoorLine, label: 'Outdoor'),
-                ],
-              ),
-            ],
           ],
         ],
       ),
@@ -517,6 +436,56 @@ class _DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(width: 8),
                   _themeChip(wx, env, setSheet, 'Dark', ThemeMode.dark),
                 ],
+              ),
+              const SizedBox(height: 16),
+              Text('Accent Color', style: wx.t(14, w: FontWeight.w600, c: wx.accent)),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: WxAccentTheme.values.map((t) {
+                  final isSelected = env.accentTheme == t;
+                  return InkWell(
+                    onTap: () {
+                      env.setAccentTheme(t);
+                      setSheet(() {});
+                    },
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                      decoration: BoxDecoration(
+                        color: isSelected ? t.color.withValues(alpha: 0.28) : wx.chipOff,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: isSelected ? t.color : Colors.transparent,
+                          width: 1.5,
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 12,
+                            height: 12,
+                            decoration: BoxDecoration(
+                              color: t.color,
+                              shape: BoxShape.circle,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            t.label,
+                            style: wx.t(
+                              12,
+                              w: isSelected ? FontWeight.w600 : FontWeight.w400,
+                              c: isSelected ? t.color : wx.textDim,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
               ),
               const SizedBox(height: 20),
               if (!env.isLoggedIn) ...[
@@ -887,7 +856,7 @@ class _Hero extends StatelessWidget {
                           children: [
                             WeatherGlyph(code: out?.weatherCode ?? 1, size: 100),
                             const SizedBox(height: 2),
-                            Text('Outside: ${out?.weatherDesc ?? '--'}',
+                            Text('Outside: ${(out?.weatherDesc ?? '--').replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim()}',
                                 style: wx.t(12, c: soft)),
                           ],
                         ),

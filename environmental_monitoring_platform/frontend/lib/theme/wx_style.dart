@@ -5,31 +5,124 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:environmental_monitoring_platform/models/chart_point.dart';
+import 'dart:ui';
+import 'package:provider/provider.dart';
+import 'package:environmental_monitoring_platform/providers/environment_provider.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 //  Design tokens — lavender Material-You look from the Google Weather redesign
 // ─────────────────────────────────────────────────────────────────────────────
 
+
+enum WxAccentTheme {
+  purple(
+    label: 'Purple',
+    darkAccent: Color(0xFFD0A8FF),
+    lightAccent: Color(0xFF8A1FD6),
+    darkHero: [Color(0xFF2A2066), Color(0xFF45307F), Color(0xFF7C4B86)],
+    lightHero: [Color(0xFF5B43CC), Color(0xFF7F52C8), Color(0xFFB56DA8)],
+    previewColor: Color(0xFF8A1FD6),
+  ),
+  ocean(
+    label: 'Ocean',
+    darkAccent: Color(0xFF70B6FF),
+    lightAccent: Color(0xFF0284C7),
+    darkHero: [Color(0xFF0F2B5C), Color(0xFF13427E), Color(0xFF1B62B3)],
+    lightHero: [Color(0xFF0284C7), Color(0xFF0EA5E9), Color(0xFF38BDF8)],
+    previewColor: Color(0xFF0284C7),
+  ),
+  emerald(
+    label: 'Emerald',
+    darkAccent: Color(0xFF6EE7B7),
+    lightAccent: Color(0xFF059669),
+    darkHero: [Color(0xFF0D3B2E), Color(0xFF135742), Color(0xFF1B7F5E)],
+    lightHero: [Color(0xFF059669), Color(0xFF10B981), Color(0xFF34D399)],
+    previewColor: Color(0xFF10B981),
+  ),
+  sunset(
+    label: 'Sunset',
+    darkAccent: Color(0xFFFF9E7A),
+    lightAccent: Color(0xFFE65100),
+    darkHero: [Color(0xFF5C2014), Color(0xFF852D1C), Color(0xFFBD4527)],
+    lightHero: [Color(0xFFE65100), Color(0xFFF97316), Color(0xFFFB923C)],
+    previewColor: Color(0xFFF97316),
+  ),
+  rose(
+    label: 'Rose',
+    darkAccent: Color(0xFFFF75B5),
+    lightAccent: Color(0xFFD81B60),
+    darkHero: [Color(0xFF54103B), Color(0xFF781B57), Color(0xFFAB2B7D)],
+    lightHero: [Color(0xFFD81B60), Color(0xFFEC4899), Color(0xFFF472B6)],
+    previewColor: Color(0xFFEC4899),
+  ),
+  cyan(
+    label: 'Cyan',
+    darkAccent: Color(0xFF5EEAD4),
+    lightAccent: Color(0xFF0D9488),
+    darkHero: [Color(0xFF093333), Color(0xFF0F4D4D), Color(0xFF186E6E)],
+    lightHero: [Color(0xFF0D9488), Color(0xFF14B8A6), Color(0xFF2DD4BF)],
+    previewColor: Color(0xFF14B8A6),
+  );
+
+  const WxAccentTheme({
+    required this.label,
+    required this.darkAccent,
+    required this.lightAccent,
+    required this.darkHero,
+    required this.lightHero,
+    required this.previewColor,
+  });
+
+  final String label;
+  final Color darkAccent;
+  final Color lightAccent;
+  final List<Color> darkHero;
+  final List<Color> lightHero;
+  final Color previewColor;
+
+  Color get color => previewColor;
+}
+
 class Wx {
-  const Wx._(this.isDark);
+  const Wx._(this.isDark, [this.accentTheme = WxAccentTheme.purple]);
   final bool isDark;
+  final WxAccentTheme accentTheme;
 
-  factory Wx.of(BuildContext context) =>
-      Wx._(Theme.of(context).brightness == Brightness.dark);
+  factory Wx.of(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    WxAccentTheme theme = WxAccentTheme.purple;
+    try {
+      final env = Provider.of<EnvironmentProvider>(context, listen: false);
+      theme = env.accentTheme;
+    } catch (_) {}
+    return Wx._(isDark, theme);
+  }
 
-  // Surfaces
-  Color get bg => isDark ? const Color(0xFF15111B) : const Color(0xFFF1E9FD);
-  Color get card => isDark ? const Color(0xFF241C30) : const Color(0xFFE7DCFB);
-  Color get chipOn => isDark ? const Color(0xFF5A3F8E) : const Color(0xFFD7BDFB);
-  Color get chipOff => isDark ? const Color(0xFF2D2339) : Colors.white;
-  Color get iconBg => isDark ? const Color(0xFF3A2D49) : Colors.white;
+  // Surfaces (Frosted Glassmorphism)
+  Color get bg => isDark ? const Color(0xFF0E0B16) : const Color(0xFFF3EDFC);
+  Color get card => isDark
+      ? const Color(0xFF1E172B).withValues(alpha: 0.60)
+      : Colors.white.withValues(alpha: 0.72);
+  Color get cardBorder => isDark
+      ? Colors.white.withValues(alpha: 0.12)
+      : Colors.white.withValues(alpha: 0.75);
+  Color get sheetBg => isDark
+      ? const Color(0xFF191224).withValues(alpha: 0.92)
+      : Colors.white.withValues(alpha: 0.94);
+  Color get chipOn => isDark ? accent.withValues(alpha: 0.35) : accent.withValues(alpha: 0.22);
+  Color get chipOff => isDark
+      ? Colors.white.withValues(alpha: 0.07)
+      : Colors.white.withValues(alpha: 0.65);
+  Color get iconBg => isDark
+      ? Colors.white.withValues(alpha: 0.08)
+      : Colors.white.withValues(alpha: 0.65);
 
   // Ink
   Color get text => isDark ? const Color(0xFFEFE8F7) : const Color(0xFF1C1822);
   Color get textDim => isDark ? const Color(0xFFA79BB8) : const Color(0xFF6A6178);
 
   // Accents
-  Color get accent => isDark ? const Color(0xFFD0A8FF) : const Color(0xFF8A1FD6);
+  Color get accent => isDark ? accentTheme.darkAccent : accentTheme.lightAccent;
   Color get accentTrack => isDark ? const Color(0xFF3A2D49) : const Color(0xFFF7EFFF);
   Color get onAccent => isDark ? const Color(0xFF1C1822) : Colors.white;
   Color get outdoorLine => isDark ? const Color(0xFFFFC72C) : const Color(0xFFE59A00);
@@ -38,9 +131,7 @@ class Wx {
   Color get warn => isDark ? const Color(0xFFFFC857) : const Color(0xFFB36B00);
   Color get warnBg => isDark ? const Color(0xFF3F2E10) : const Color(0xFFFFE9B8);
 
-  List<Color> get heroColors => isDark
-      ? const [Color(0xFF2A2066), Color(0xFF45307F), Color(0xFF7C4B86)]
-      : const [Color(0xFF5B43CC), Color(0xFF7F52C8), Color(0xFFB56DA8)];
+  List<Color> get heroColors => isDark ? accentTheme.darkHero : accentTheme.lightHero;
 
   TextStyle t(double size,
           {FontWeight w = FontWeight.w400, Color? c, double? h, double? ls}) =>
@@ -89,8 +180,8 @@ class Wx {
 ///   theme: WxTheme.build(Brightness.light),
 ///   darkTheme: WxTheme.build(Brightness.dark),
 class WxTheme {
-  static ThemeData build(Brightness brightness) {
-    final wx = Wx._(brightness == Brightness.dark);
+  static ThemeData build(Brightness brightness, [WxAccentTheme accent = WxAccentTheme.purple]) {
+    final wx = Wx._(brightness == Brightness.dark, accent);
     final scheme = ColorScheme.fromSeed(
       seedColor: const Color(0xFF7B4FD8),
       brightness: brightness,
@@ -136,14 +227,21 @@ class WxCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final wx = Wx.of(context);
-    return Container(
-      width: double.infinity,
-      padding: padding,
-      decoration: BoxDecoration(
-        color: wx.card,
-        borderRadius: BorderRadius.circular(radius),
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(radius),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 16, sigmaY: 16),
+        child: Container(
+          width: double.infinity,
+          padding: padding,
+          decoration: BoxDecoration(
+            color: wx.card,
+            borderRadius: BorderRadius.circular(radius),
+            border: Border.all(color: wx.cardBorder, width: 1.0),
+          ),
+          child: child,
+        ),
       ),
-      child: child,
     );
   }
 }
@@ -498,15 +596,36 @@ Future<T?> showWxSheet<T>(BuildContext context,
   return showModalBottomSheet<T>(
     context: context,
     isScrollControlled: true,
-    showDragHandle: true,
-    backgroundColor: wx.bg,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
-    ),
-    builder: (ctx) => Padding(
-      padding: EdgeInsets.fromLTRB(
-          20, 0, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
-      child: SingleChildScrollView(child: builder(ctx)),
+    backgroundColor: Colors.transparent,
+    builder: (ctx) => ClipRRect(
+      borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+      child: BackdropFilter(
+        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+        child: Container(
+          decoration: BoxDecoration(
+            color: wx.sheetBg,
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(32)),
+            border: Border.all(color: wx.cardBorder, width: 1.0),
+          ),
+          padding: EdgeInsets.fromLTRB(
+              20, 16, 20, MediaQuery.of(ctx).viewInsets.bottom + 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 36,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: wx.textDim.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              SingleChildScrollView(child: builder(ctx)),
+            ],
+          ),
+        ),
+      ),
     ),
   );
 }

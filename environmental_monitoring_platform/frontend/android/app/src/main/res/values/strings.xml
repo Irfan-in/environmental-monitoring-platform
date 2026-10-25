@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">IEMP</string>
+    <string name="widget_name">IEMP Climate</string>
+    <string name="widget_description">Live indoor and outdoor climate monitor</string>
+</resources>

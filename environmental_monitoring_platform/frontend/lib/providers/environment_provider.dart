@@ -7,6 +7,7 @@ import '../models/alert_item.dart';
 import '../models/chart_point.dart';
 import '../services/api_service.dart';
 import '../services/local_storage_service.dart';
+import '../services/widget_service.dart';
 import '../theme/wx_style.dart';
 
 class EnvironmentProvider with ChangeNotifier {
@@ -211,6 +212,7 @@ class EnvironmentProvider with ChangeNotifier {
 
     _historyPoints = validPoints;
     notifyListeners();
+    _syncWidgetData();
   }
 
   void startAutoPolling({Duration interval = const Duration(seconds: 4)}) {
@@ -400,6 +402,7 @@ class EnvironmentProvider with ChangeNotifier {
         _isLoading = false;
       }
       notifyListeners();
+      _syncWidgetData();
     }
   }
 
@@ -475,5 +478,32 @@ class EnvironmentProvider with ChangeNotifier {
   void dispose() {
     _pollingTimer?.cancel();
     super.dispose();
+  }
+
+  void _syncWidgetData() {
+    final live = isEsp32Online ? _indoorReading : null;
+    final out = _outdoorReading;
+    final inT = live?.temperature != null
+        ? '${live!.temperature.toStringAsFixed(1)}°'
+        : '--°';
+    final outT = out?.temperature != null
+        ? '${out!.temperature.toStringAsFixed(1)}°'
+        : '--°';
+    final hum = live?.humidity != null
+        ? '${live!.humidity.toStringAsFixed(0)}%'
+        : '--%';
+    final desc = (out?.weatherDesc ?? '--')
+        .replaceAll(RegExp(r'\s*\([^)]*\)'), '')
+        .trim();
+    final city = out?.city ?? 'Periya, Kerala';
+
+    WidgetService.update(
+      indoorTemp: inT,
+      outdoorTemp: outT,
+      humidity: hum,
+      weatherDesc: desc,
+      location: city,
+      updated: isEsp32Online ? '• Live' : '• Offline',
+    );
   }
 }

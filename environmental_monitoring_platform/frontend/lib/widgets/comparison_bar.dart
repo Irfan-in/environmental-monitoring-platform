@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
+import 'package:environmental_monitoring_platform/theme/wx_style.dart';
 
 class ComparisonBar extends StatelessWidget {
   final String label;
   final double indoorVal;
   final double outdoorVal;
   final String unit;
-  final Color indoorColor;
-  final Color outdoorColor;
+  final Color? indoorColor;
+  final Color? outdoorColor;
 
   const ComparisonBar({
     super.key,
@@ -14,26 +15,25 @@ class ComparisonBar extends StatelessWidget {
     required this.indoorVal,
     required this.outdoorVal,
     required this.unit,
-    this.indoorColor = const Color(0xFF38BDF8),
-    this.outdoorColor = const Color(0xFFFB923C),
+    this.indoorColor,
+    this.outdoorColor,
   });
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final wx = Wx.of(context);
+    final inColor = indoorColor ?? wx.accent;
+    final outColor = outdoorColor ?? wx.outdoorLine;
+
     final diff = indoorVal - outdoorVal;
     final diffSign = diff > 0 ? '+' : '';
-    final diffColor = diff > 0 ? Colors.orangeAccent : Colors.lightBlueAccent;
+    final diffColor = diff > 0 ? wx.outdoorLine : wx.accent;
 
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(
-          color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-        ),
+        color: wx.card,
+        borderRadius: BorderRadius.circular(24),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -43,17 +43,13 @@ class ComparisonBar extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: TextStyle(
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                  fontWeight: FontWeight.bold,
-                  fontSize: 15,
-                ),
+                style: wx.t(15, w: FontWeight.w600),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                 decoration: BoxDecoration(
                   color: diffColor.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(6),
+                  borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   'Δ $diffSign${diff.toStringAsFixed(1)} $unit',
@@ -79,14 +75,14 @@ class ComparisonBar extends StatelessWidget {
                           width: 8,
                           height: 8,
                           decoration: BoxDecoration(
-                            color: indoorColor,
+                            color: inColor,
                             shape: BoxShape.circle,
                           ),
                         ),
                         const SizedBox(width: 6),
-                        const Text(
+                        Text(
                           'Indoor',
-                          style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                          style: wx.t(12, c: wx.textDim),
                         ),
                       ],
                     ),
@@ -94,7 +90,7 @@ class ComparisonBar extends StatelessWidget {
                     Text(
                       '${indoorVal.toStringAsFixed(1)} $unit',
                       style: TextStyle(
-                        color: indoorColor,
+                        color: inColor,
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
                       ),
@@ -105,7 +101,7 @@ class ComparisonBar extends StatelessWidget {
               Container(
                 height: 36,
                 width: 1,
-                color: const Color(0xFF334155),
+                color: wx.textDim.withValues(alpha: 0.2),
               ),
               Expanded(
                 child: Padding(
@@ -119,14 +115,14 @@ class ComparisonBar extends StatelessWidget {
                             width: 8,
                             height: 8,
                             decoration: BoxDecoration(
-                              color: outdoorColor,
+                              color: outColor,
                               shape: BoxShape.circle,
                             ),
                           ),
                           const SizedBox(width: 6),
-                          const Text(
+                          Text(
                             'Outdoor',
-                            style: TextStyle(color: Color(0xFF94A3B8), fontSize: 12),
+                            style: wx.t(12, c: wx.textDim),
                           ),
                         ],
                       ),
@@ -134,7 +130,7 @@ class ComparisonBar extends StatelessWidget {
                       Text(
                         '${outdoorVal.toStringAsFixed(1)} $unit',
                         style: TextStyle(
-                          color: outdoorColor,
+                          color: outColor,
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                         ),

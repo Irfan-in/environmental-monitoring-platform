@@ -27,19 +27,24 @@ class EnvironmentProvider with ChangeNotifier {
   double? _lastDismissedHumidity;
 
   // Theme State: Default to Dark Mode
-  bool _isDarkMode = true;
-  bool get isDarkMode => _isDarkMode;
+  ThemeMode _themeMode = ThemeMode.dark;
+  ThemeMode get themeMode => _themeMode;
+  bool get isDarkMode => _themeMode == ThemeMode.dark;
+
+  void setThemeMode(ThemeMode mode) {
+    if (_themeMode != mode) {
+      _themeMode = mode;
+      notifyListeners();
+    }
+  }
 
   void toggleTheme() {
-    _isDarkMode = !_isDarkMode;
+    _themeMode = _themeMode == ThemeMode.dark ? ThemeMode.light : ThemeMode.dark;
     notifyListeners();
   }
 
   void setDarkMode(bool value) {
-    if (_isDarkMode != value) {
-      _isDarkMode = value;
-      notifyListeners();
-    }
+    setThemeMode(value ? ThemeMode.dark : ThemeMode.light);
   }
 
   // User Auth State

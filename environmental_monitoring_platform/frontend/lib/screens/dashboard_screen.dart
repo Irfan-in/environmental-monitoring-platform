@@ -1,498 +1,489 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-import '../providers/environment_provider.dart';
-import '../services/api_service.dart';
-import '../widgets/metric_card.dart';
+import 'package:environmental_monitoring_platform/models/chart_point.dart';
+import 'package:environmental_monitoring_platform/providers/environment_provider.dart';
+import 'package:environmental_monitoring_platform/services/api_service.dart';
+import 'package:environmental_monitoring_platform/theme/wx_style.dart';
 
-class DashboardScreen extends StatelessWidget {
+class DashboardScreen extends StatefulWidget {
   const DashboardScreen({super.key});
+
+  @override
+  State<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends State<DashboardScreen> {
+  int _view = 0; // 0 = indoor, 1 = outdoor, 2 = compare
 
   @override
   Widget build(BuildContext context) {
     final env = context.watch<EnvironmentProvider>();
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    final indoor = env.indoorReading;
-    final outdoor = env.outdoorReading;
-    final comparison = env.comparisonData;
-    final isEsp32Online = env.isEsp32Online;
+    final wx = Wx.of(context);
+    final points = _todayPoints(env);
+    final advisory = env.activeClimateAdvisory;
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
-      appBar: AppBar(
-        backgroundColor: theme.appBarTheme.backgroundColor,
-        elevation: theme.appBarTheme.elevation,
-        title: Row(
+      backgroundColor: wx.bg,
+      body: RefreshIndicator(
+        onRefresh: () => env.fetchData(),
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          padding: EdgeInsets.zero,
           children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: Icon(Icons.wb_sunny_outlined, color: theme.colorScheme.primary, size: 20),
+            _Hero(
+              env: env,
+              onAccount: () => _showLoginSheet(context, env),
+              onSettings: () => _showSettingsSheet(context, env),
             ),
-            const SizedBox(width: 10),
-            Text(
-              'Environmental Monitoring',
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                fontSize: 18,
-                letterSpacing: -0.3,
-                color: isDark ? Colors.white : const Color(0xFF0F172A),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              child: Column(
+                children: [
+                  if (advisory != null) ...[
+                    _advisoryBanner(wx, env, advisory),
+                    const SizedBox(height: 12),
+                  ],
+                  WxChips(
+                    labels: const ['Indoor', 'Outdoor', 'Compare'],
+                    index: _view,
+                    onChanged: (i) => setState(() => _view = i),
+                  ),
+                  const SizedBox(height: 12),
+                  _tileGrid(_tiles(env, points)),
+                  const SizedBox(height: 12),
+                  _recentCard(wx, env, points),
+                  const SizedBox(height: 12),
+                  _trendCard(wx, env, points),
+                  const SizedBox(height: 12),
+                  _humidityCard(wx, env),
+                  const SizedBox(height: 12),
+                  _footerTiles(env),
+                ],
               ),
             ),
           ],
         ),
-        actions: [
-          // User Login Button (Simple User Icon)
-          IconButton(
-            icon: Icon(
-              env.isLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
-              color: env.isLoggedIn ? theme.colorScheme.primary : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-              size: 24,
-            ),
-            tooltip: 'User Login',
-            onPressed: () => _showUserLoginSheet(context, env),
-          ),
+      ),
+    );
+  }
 
-          // Settings Button (Main Configuration Hub)
-          IconButton(
-            icon: Icon(
-              Icons.settings_outlined,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-              size: 22,
-            ),
-            tooltip: 'Station Settings & Diagnostics',
-            onPressed: () => _showSettingsSheet(context, env),
+  // ── data helpers ───────────────────────────────────────────────────────────
+
+  List<ChartPoint> _todayPoints(EnvironmentProvider env) {
+    if (!env.isSelectedDateToday) return const [];
+    final now = DateTime.now();
+    return env.historyPoints
+        .where((p) => p.timestamp.difference(now).inMinutes < 5)
+        .toList();
+  }
+
+  double? _change(List<ChartPoint> pts, double? Function(ChartPoint) pick) {
+    double? first;
+    double? last;
+    for (final p in pts) {
+      final v = pick(p);
+      if (v == null) continue;
+      first ??= v;
+      last = v;
+    }
+    if (first == null || last == null) return null;
+    final d = last - first;
+    return d.abs() < 0.05 ? null : d;
+  }
+
+  String _ago(DateTime? t) {
+    if (t == null) return '--';
+    final s = DateTime.now().difference(t).inSeconds;
+    if (s < 5) return 'Just now';
+    if (s < 60) return '${s}s ago';
+    if (s < 3600) return '${s ~/ 60}m ago';
+    return '${s ~/ 3600}h ago';
+  }
+
+  double? _pick(ChartPoint p) {
+    switch (_view) {
+      case 1:
+        return p.outdoorTemperature;
+      case 2:
+        {
+          final a = p.indoorTemperature;
+          final b = p.outdoorTemperature;
+          return (a != null && b != null) ? a - b : null;
+        }
+      default:
+        return p.indoorTemperature;
+    }
+  }
+
+  List<ChartPoint> _sample(List<ChartPoint> pts, int n) {
+    if (pts.length <= n) return pts;
+    return [
+      for (var i = 0; i < n; i++) pts[(i * (pts.length - 1) / (n - 1)).round()],
+    ];
+  }
+
+  // ── sections ───────────────────────────────────────────────────────────────
+
+  Widget _advisoryBanner(Wx wx, EnvironmentProvider env, String message) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 8, 6, 8),
+      decoration: BoxDecoration(
+        color: wx.warnBg,
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.warning_amber_rounded, color: wx.warn, size: 22),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(message,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: wx.t(13, w: FontWeight.w500, c: wx.warn)),
           ),
-          const SizedBox(width: 4),
+          TextButton(
+            onPressed: env.dismissAdvisory,
+            child: Text('Dismiss',
+                style: wx.t(13, w: FontWeight.w600, c: wx.warn)),
+          ),
         ],
       ),
-      body: RefreshIndicator(
-        onRefresh: () => env.fetchData(),
-        child: SingleChildScrollView(
-          physics: const AlwaysScrollableScrollPhysics(),
-          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // 1. Sleek Hardware Node Status Banner
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 10,
-                      height: 10,
-                      decoration: BoxDecoration(
-                        color: isEsp32Online ? const Color(0xFF10B981) : const Color(0xFFEF4444),
-                        shape: BoxShape.circle,
-                        boxShadow: isEsp32Online
-                            ? [
-                                BoxShadow(
-                                  color: const Color(0xFF10B981).withValues(alpha: 0.5),
-                                  blurRadius: 6,
-                                  spreadRadius: 1,
-                                )
-                              ]
-                            : null,
-                      ),
-                    ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            isEsp32Online ? 'ESP32-ENV-01 • Active' : 'ESP32-ENV-01 • Standby',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.bold,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            ),
-                          ),
-                          Text(
-                            isEsp32Online
-                                ? 'Telemetry stream active via Cloud Ingestion Gateway'
-                                : 'Awaiting incoming sensor signal via Gateway buffer',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    if (isEsp32Online && indoor != null)
-                      Text(
-                        DateFormat('HH:mm:ss').format(indoor.timestamp.toLocal()),
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                        ),
-                      ),
-                  ],
-                ),
-              ),
+    );
+  }
 
-              // 2. Role-Based Access Control (RBAC) Mode Chip
-              Container(
-                margin: const EdgeInsets.only(top: 8),
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                decoration: BoxDecoration(
-                  color: env.isLoggedIn
-                      ? const Color(0xFF10B981).withValues(alpha: 0.1)
-                      : (isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9)),
-                  borderRadius: BorderRadius.circular(10),
-                  border: Border.all(
-                    color: env.isLoggedIn
-                        ? const Color(0xFF10B981).withValues(alpha: 0.3)
-                        : (isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1)),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Icon(
-                      env.isLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
-                      size: 16,
-                      color: env.isLoggedIn ? const Color(0xFF10B981) : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B)),
-                    ),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        env.isLoggedIn
-                            ? 'User: ${env.username}'
-                            : 'Guest Mode',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          color: env.isLoggedIn
-                              ? const Color(0xFF10B981)
-                              : (isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569)),
-                        ),
-                      ),
-                    ),
-                    InkWell(
-                      borderRadius: BorderRadius.circular(4),
-                      onTap: () => _showUserLoginSheet(context, env),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        child: Text(
-                          env.isLoggedIn ? 'Log Out' : 'Log In',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+  List<WxTile> _tiles(EnvironmentProvider env, List<ChartPoint> pts) {
+    final live = env.isEsp32Online ? env.indoorReading : null;
+    final out = env.outdoorReading;
+    String deg(num? v) => v == null ? '--' : '${v.toStringAsFixed(1)}°';
+    String pct(num? v) => v == null ? '--' : '${v.toStringAsFixed(0)}%';
+    String sg(num? v, String u) =>
+        v == null ? '--' : '${v >= 0 ? '+' : ''}${v.toStringAsFixed(1)}$u';
 
-              // 3. Single Climate Advisory Card (ONLY shown if there's an actual active condition)
-              if (env.activeClimateAdvisory != null) ...[
-                const SizedBox(height: 10),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B).withValues(alpha: 0.12),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFFF59E0B).withValues(alpha: 0.3)),
-                  ),
-                  child: Row(
-                    children: [
-                      const Icon(Icons.warning_amber_rounded, color: Color(0xFFF59E0B), size: 18),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Text(
-                          env.activeClimateAdvisory!,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: Color(0xFFF59E0B),
-                          ),
-                        ),
-                      ),
-                      TextButton(
-                        onPressed: () => env.dismissAdvisory(),
-                        style: TextButton.styleFrom(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                          minimumSize: Size.zero,
-                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        ),
-                        child: const Text('Dismiss', style: TextStyle(fontSize: 11, color: Color(0xFFF59E0B), fontWeight: FontWeight.bold)),
-                      ),
-                    ],
-                  ),
-                ),
+    switch (_view) {
+      case 1:
+        return [
+          WxTile(
+            icon: Icons.thermostat,
+            label: 'Temperature',
+            value: deg(out?.temperature),
+            delta: _change(pts, (p) => p.outdoorTemperature),
+            deltaUnit: '°',
+          ),
+          WxTile(
+            icon: Icons.water_drop_outlined,
+            label: 'Humidity',
+            value: pct(out?.humidity),
+            delta: _change(pts, (p) => p.outdoorHumidity),
+            deltaUnit: '%',
+          ),
+          WxTile(
+            icon: Icons.air,
+            label: 'Wind',
+            value: out == null ? '--' : '${out.windSpeed.toStringAsFixed(1)} km/h',
+          ),
+          WxTile(
+            icon: out?.isCached == true
+                ? Icons.cloud_off_outlined
+                : Icons.cloud_done_outlined,
+            label: 'Weather data',
+            value: out == null ? '--' : (out.isCached == true ? 'Cached' : 'Live'),
+          ),
+        ];
+      case 2:
+        final dT = env.comparisonData?.tempDiff;
+        final dH = (live != null && out != null) ? live.humidity - out.humidity : null;
+        return [
+          WxTile(icon: Icons.swap_vert, label: 'Temp gap', value: sg(dT, '°')),
+          WxTile(icon: Icons.water_drop_outlined, label: 'Humidity gap', value: sg(dH, '%')),
+          WxTile(
+            icon: Icons.sentiment_satisfied_alt_outlined,
+            label: 'Comfort',
+            value: env.comparisonData?.comfortAssessment ?? 'Optimal',
+          ),
+          WxTile(
+            icon: Icons.storage_outlined,
+            label: 'Saved readings',
+            value: '${env.localRecordCount}',
+          ),
+        ];
+      default:
+        final feels =
+            live == null ? null : Wx.feelsLike(live.temperature, live.humidity);
+        return [
+          WxTile(
+            icon: Icons.thermostat,
+            label: 'Temperature',
+            value: deg(live?.temperature),
+            delta: _change(pts, (p) => p.indoorTemperature),
+            deltaUnit: '°',
+          ),
+          WxTile(
+            icon: Icons.water_drop_outlined,
+            label: 'Humidity',
+            value: pct(live?.humidity),
+            delta: _change(pts, (p) => p.indoorHumidity),
+            deltaUnit: '%',
+          ),
+          WxTile(icon: Icons.device_thermostat, label: 'Feels like', value: deg(feels)),
+          WxTile(
+            icon: Icons.schedule,
+            label: 'Updated',
+            value: _ago(env.indoorReading?.timestamp),
+          ),
+        ];
+    }
+  }
+
+  Widget _tileGrid(List<WxTile> t) => Column(
+        children: [
+          Row(children: [
+            Expanded(child: t[0]),
+            const SizedBox(width: 8),
+            Expanded(child: t[1]),
+          ]),
+          const SizedBox(height: 8),
+          Row(children: [
+            Expanded(child: t[2]),
+            const SizedBox(width: 8),
+            Expanded(child: t[3]),
+          ]),
+        ],
+      );
+
+  Widget _archiveNote(Wx wx, EnvironmentProvider env) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Showing ${DateFormat('d MMM').format(env.selectedDate)}. '
+          'Switch back to see today’s live readings.',
+          style: wx.t(13, c: wx.textDim),
+        ),
+        TextButton(
+          onPressed: env.resetToToday,
+          style: TextButton.styleFrom(padding: EdgeInsets.zero),
+          child: Text('Back to today',
+              style: wx.t(13, w: FontWeight.w600, c: wx.accent)),
+        ),
+      ],
+    );
+  }
+
+  Widget _recentCard(Wx wx, EnvironmentProvider env, List<ChartPoint> pts) {
+    final samples = _sample(pts, 6);
+    final icon = _view == 1
+        ? Icons.cloud_outlined
+        : (_view == 2 ? Icons.swap_vert : Icons.thermostat);
+
+    return WxCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const WxCardTitle(icon: Icons.history, title: 'Recent readings'),
+          const SizedBox(height: 14),
+          if (!env.isSelectedDateToday)
+            _archiveNote(wx, env)
+          else if (samples.isEmpty)
+            Text('Sensor readings will appear here once connected.',
+                style: wx.t(13, c: wx.textDim))
+          else
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                for (var i = 0; i < samples.length; i++)
+                  Builder(builder: (_) {
+                    final v = _pick(samples[i]);
+                    final label = i == samples.length - 1
+                        ? 'Now'
+                        : DateFormat('HH:mm').format(samples[i].timestamp.toLocal());
+                    final text = v == null
+                        ? '--'
+                        : (_view == 2 && v >= 0
+                            ? '+${v.toStringAsFixed(1)}°'
+                            : '${v.toStringAsFixed(1)}°');
+                    return Column(
+                      children: [
+                        Text(label, style: wx.t(11, c: wx.textDim)),
+                        const SizedBox(height: 8),
+                        WxIconDot(icon: icon, size: 30),
+                        const SizedBox(height: 8),
+                        Text(text, style: wx.t(14, w: FontWeight.w500)),
+                      ],
+                    );
+                  }),
               ],
+            ),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 16),
-
-              // 3. Primary Microclimate Section Header
-              Text(
-                'INDOOR MICROCLIMATE SENSING',
-                style: TextStyle(
-                  color: theme.colorScheme.primary,
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              // Primary Telemetry Metric Cards (Large & Clean)
+  Widget _trendCard(Wx wx, EnvironmentProvider env, List<ChartPoint> pts) {
+    final title = _view == 0
+        ? 'Indoor trend'
+        : (_view == 1 ? 'Outdoor trend' : 'Comparison trend');
+    return WxCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          WxCardTitle(icon: Icons.show_chart, title: title),
+          const SizedBox(height: 16),
+          if (!env.isSelectedDateToday)
+            _archiveNote(wx, env)
+          else ...[
+            WxTrendChart(
+              points: pts,
+              temperature: true,
+              showIndoor: _view != 1,
+              showOutdoor: _view != 0,
+              height: 170,
+            ),
+            if (_view == 2) ...[
+              const SizedBox(height: 10),
               Row(
                 children: [
-                  Expanded(
-                    child: MetricCard(
-                      title: 'Temperature',
-                      value: isEsp32Online && indoor != null
-                          ? indoor.temperature.toStringAsFixed(1)
-                          : '--.-',
-                      unit: '°C',
-                      icon: Icons.thermostat,
-                      accentColor: const Color(0xFF38BDF8),
-                      subtitle: 'DHT22 Sensor (GPIO 4)',
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: MetricCard(
-                      title: 'Relative Humidity',
-                      value: isEsp32Online && indoor != null
-                          ? indoor.humidity.toStringAsFixed(1)
-                          : '--.-',
-                      unit: '%',
-                      icon: Icons.water_drop_outlined,
-                      accentColor: const Color(0xFF34D399),
-                      subtitle: 'Capacitive Humidity',
-                    ),
-                  ),
+                  WxLegendDot(color: wx.accent, label: 'Indoor'),
+                  const SizedBox(width: 16),
+                  WxLegendDot(color: wx.outdoorLine, label: 'Outdoor'),
                 ],
               ),
+            ],
+          ],
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 18),
+  Widget _humidityCard(Wx wx, EnvironmentProvider env) {
+    final live = env.isEsp32Online ? env.indoorReading : null;
+    final out = env.outdoorReading;
+    final inH = live?.humidity;
+    final outH = out?.humidity;
 
-              // 4. Outdoor Meteorological Reference Section
-              Text(
-                'AMBIENT METEOROLOGICAL REFERENCE',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
+    String hint = 'Waiting for sensor.';
+    if (inH != null) {
+      if (inH > 70) {
+        hint = 'High humidity. Airflow recommended.';
+      } else if (inH < 30) {
+        hint = 'Dry air. Humidifier recommended.';
+      } else {
+        hint = 'Comfortable humidity level.';
+      }
+    }
 
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                  ),
-                ),
-                child: Row(
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFB923C).withValues(alpha: 0.15),
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(Icons.wb_sunny_outlined, color: Color(0xFFFB923C), size: 24),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            outdoor != null ? outdoor.city : 'Local Area Station',
-                            style: TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
-                              color: isDark ? Colors.white : const Color(0xFF0F172A),
-                            ),
-                          ),
-                          Text(
-                            outdoor != null ? outdoor.weatherDesc : 'Satellite Weather Sync',
-                            style: TextStyle(
-                              fontSize: 11,
-                              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.end,
-                      children: [
-                        Text(
-                          outdoor != null ? '${outdoor.temperature.toStringAsFixed(1)}°C' : '--°C',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: isDark ? Colors.white : const Color(0xFF0F172A),
-                          ),
-                        ),
-                        Text(
-                          outdoor != null ? '${outdoor.humidity.toStringAsFixed(0)}% RH' : '--% RH',
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: Color(0xFFFB923C),
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-
-              const SizedBox(height: 18),
-
-              // 5. Differential & Thermal Assessment (ASHRAE 55)
-              Text(
-                'DIFFERENTIAL & THERMAL COMFORT (ASHRAE 55)',
-                style: TextStyle(
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                  fontSize: 11,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 8),
-
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: theme.cardColor,
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(
-                    color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                  ),
-                ),
+    return WxCard(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const WxCardTitle(icon: Icons.water_drop_outlined, title: 'Humidity'),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              WxWaveGauge(percent: inH?.toDouble(), caption: 'Indoor'),
+              const SizedBox(width: 16),
+              Expanded(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.compare_arrows, color: Color(0xFF38BDF8), size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Temperature Delta (ΔT)',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Builder(
-                          builder: (context) {
-                            final diff = comparison?.tempDiff;
-                            if (diff == null) {
-                              return const Text('--', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold));
-                            }
-                            return Text(
-                              '${diff >= 0 ? '+' : ''}${diff.toStringAsFixed(1)}°C',
-                              style: TextStyle(
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                                color: diff > 0 ? const Color(0xFFFB923C) : const Color(0xFF38BDF8),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
+                    WxBarRow(
+                      label: 'Indoor',
+                      fraction: inH == null ? null : inH / 100,
+                      valueText: inH == null ? '--' : '${inH.toStringAsFixed(0)}%',
                     ),
-                    const SizedBox(height: 8),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFF1F5F9), height: 1),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            const Icon(Icons.shield_outlined, color: Color(0xFF10B981), size: 18),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Comfort Index',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                        Text(
-                          comparison?.comfortAssessment ?? 'Nominal Indoor Range',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: Color(0xFF10B981),
-                          ),
-                        ),
-                      ],
+                    const SizedBox(height: 12),
+                    WxBarRow(
+                      label: 'Outdoor',
+                      fraction: outH == null ? null : outH / 100,
+                      valueText: outH == null ? '--' : '${outH.toStringAsFixed(0)}%',
+                      color: wx.outdoorLine,
                     ),
+                    const SizedBox(height: 12),
+                    Text(hint, style: wx.t(12, c: wx.textDim)),
                   ],
                 ),
               ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
-              const SizedBox(height: 20),
+  Widget _footerTiles(EnvironmentProvider env) {
+    final live = env.isEsp32Online ? env.indoorReading : null;
+    return Row(
+      children: [
+        Expanded(
+          child: WxInfoTile(
+            icon: Icons.sensors,
+            label: 'Sensor',
+            value: env.isEsp32Online ? 'Online' : 'Offline',
+            caption: live == null
+                ? 'ESP32 Node'
+                : DateFormat('HH:mm:ss').format(live.timestamp.toLocal()),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: WxInfoTile(
+            icon: Icons.storage_outlined,
+            label: 'Local storage',
+            value: '${env.localRecordCount}',
+            caption: 'saved records',
+          ),
+        ),
+      ],
+    );
+  }
 
-              // 6. Local Storage Indicator Pill
-              Center(
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(
-                      color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0),
-                    ),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Icon(Icons.save_outlined, size: 13, color: Color(0xFF38BDF8)),
-                      const SizedBox(width: 6),
-                      Text(
-                        'Device Storage: ${env.localRecordCount} telemetry records archived locally',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                        ),
-                      ),
-                    ],
-                  ),
+  // ── sheets ─────────────────────────────────────────────────────────────────
+
+  Widget _themeChip(
+    Wx wx,
+    EnvironmentProvider env,
+    StateSetter setSheet,
+    String label,
+    ThemeMode mode,
+  ) {
+    final selected = env.themeMode == mode;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          env.setThemeMode(mode);
+          setSheet(() {});
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: selected ? wx.accent : wx.iconBg,
+            borderRadius: BorderRadius.circular(16),
+            border: selected
+                ? null
+                : Border.all(color: wx.textDim.withValues(alpha: 0.2)),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(
+                mode == ThemeMode.system
+                    ? Icons.brightness_auto_outlined
+                    : (mode == ThemeMode.light
+                        ? Icons.light_mode_outlined
+                        : Icons.dark_mode_outlined),
+                color: selected ? wx.onAccent : wx.textDim,
+                size: 20,
+              ),
+              const SizedBox(height: 4),
+              Text(
+                label,
+                style: wx.t(
+                  12,
+                  w: FontWeight.w600,
+                  c: selected ? wx.onAccent : wx.textDim,
                 ),
               ),
-              const SizedBox(height: 10),
             ],
           ),
         ),
@@ -500,529 +491,415 @@ class DashboardScreen extends StatelessWidget {
     );
   }
 
-  // --- Access Denied Dialog for Public Observer Mode ---
-  void _showAccessDeniedDialog(BuildContext context, EnvironmentProvider env) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
-
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: theme.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
-                  borderRadius: BorderRadius.circular(2),
-                ),
-              ),
-              const SizedBox(height: 20),
-              Container(
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.lock_outline, color: Color(0xFFF59E0B), size: 32),
-              ),
-              const SizedBox(height: 16),
-              Text(
-                'Login Required',
-                style: TextStyle(
-                  fontSize: 17,
-                  fontWeight: FontWeight.bold,
-                  color: isDark ? Colors.white : const Color(0xFF0F172A),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Please sign in to your account to adjust sensor calibration or change settings.',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                  height: 1.4,
-                ),
-              ),
-              const SizedBox(height: 20),
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: theme.colorScheme.primary,
-                    foregroundColor: const Color(0xFF0F172A),
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                  ),
-                  icon: const Icon(Icons.login, size: 18),
-                  label: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold)),
-                  onPressed: () {
-                    Navigator.pop(ctx);
-                    _showUserLoginSheet(context, env);
-                  },
-                ),
-              ),
-              const SizedBox(height: 8),
-              TextButton(
-                onPressed: () => Navigator.pop(ctx),
-                child: Text(
-                  'Continue in Guest Mode',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        );
-      },
-    );
-  }
-
-  // --- Clean Settings & Preferences Bottom Sheet (Operator Only) ---
   void _showSettingsSheet(BuildContext context, EnvironmentProvider env) {
-    if (!env.isLoggedIn) {
-      _showAccessDeniedDialog(context, env);
-      return;
-    }
-
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+    final wx = Wx.of(context);
     final serverController = TextEditingController(text: ApiService.baseUrl);
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: theme.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 20,
-                right: 20,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+    showWxSheet(
+      context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) {
+          final off = env.temperatureOffset;
+          final offText = '${off >= 0 ? '+' : ''}${off.toStringAsFixed(1)}°C';
+          return Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Settings', style: wx.t(22, w: FontWeight.w500)),
+              const SizedBox(height: 16),
+              Text('Theme', style: wx.t(14, w: FontWeight.w600, c: wx.accent)),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _themeChip(wx, env, setSheet, 'System', ThemeMode.system),
+                  const SizedBox(width: 8),
+                  _themeChip(wx, env, setSheet, 'Light', ThemeMode.light),
+                  const SizedBox(width: 8),
+                  _themeChip(wx, env, setSheet, 'Dark', ThemeMode.dark),
+                ],
               ),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        decoration: BoxDecoration(
-                          color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
-                          borderRadius: BorderRadius.circular(2),
+              const SizedBox(height: 20),
+              if (!env.isLoggedIn) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: wx.iconBg,
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          'Sign in for sensor calibration & gateway settings.',
+                          style: wx.t(12, c: wx.textDim),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Row(
-                          children: [
-                            Icon(Icons.tune, color: theme.colorScheme.primary, size: 22),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Settings',
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                              ),
-                            ),
-                          ],
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(ctx),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-
-                    // 1. Theme Toggle
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: Icon(
-                        env.isDarkMode ? Icons.dark_mode_outlined : Icons.light_mode_outlined,
-                        color: theme.colorScheme.primary,
-                      ),
-                      title: const Text('Dark Mode Appearance', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
-                      trailing: Switch(
-                        value: env.isDarkMode,
-                        onChanged: (val) {
-                          env.toggleTheme();
-                          setSheetState(() {});
+                      TextButton(
+                        onPressed: () {
+                          Navigator.pop(ctx);
+                          _showLoginSheet(context, env);
                         },
+                        child: const Text('Sign in'),
                       ),
-                    ),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-
-                    // 2. Sensor Calibration Offset
-                    const SizedBox(height: 8),
-                    Text(
-                      'HARDWARE SENSOR CALIBRATION',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Temperature Offset:',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
-                          ),
-                        ),
-                        Text(
-                          '${env.temperatureOffset >= 0 ? '+' : ''}${env.temperatureOffset.toStringAsFixed(1)}°C',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.bold,
-                            color: theme.colorScheme.primary,
-                          ),
-                        ),
-                      ],
-                    ),
-                    Slider(
-                      value: env.temperatureOffset,
-                      min: -5.0,
-                      max: 5.0,
-                      divisions: 20,
-                      label: '${env.temperatureOffset >= 0 ? '+' : ''}${env.temperatureOffset.toStringAsFixed(1)}°C',
-                      onChanged: (val) {
-                        env.setTemperatureOffset(val);
-                        setSheetState(() {});
-                      },
-                    ),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-
-                    // 3. Gateway Buffer Endpoint
-                    const SizedBox(height: 8),
-                    Text(
-                      'CLOUD GATEWAY BUFFER URL',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    TextField(
-                      controller: serverController,
-                      style: const TextStyle(fontSize: 12),
-                      decoration: InputDecoration(
-                        isDense: true,
-                        hintText: 'https://...',
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                        suffixIcon: IconButton(
-                          icon: const Icon(Icons.save, size: 18),
-                          onPressed: () {
-                            ApiService.setBaseUrl(serverController.text.trim());
-                            env.fetchData();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Gateway endpoint saved!')),
-                            );
-                          },
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
-
-                    // 4. Local Data Management
-                    Text(
-                      'LOCAL TELEMETRY REPOSITORY',
-                      style: TextStyle(
-                        color: theme.colorScheme.primary,
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.0,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: OutlinedButton.icon(
-                            icon: const Icon(Icons.delete_sweep_outlined, size: 16),
-                            label: const Text('Clear Storage', style: TextStyle(fontSize: 12)),
-                            onPressed: () async {
-                              await env.clearLocalStorage();
-                              if (!ctx.mounted) return;
-                              Navigator.pop(ctx);
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Local telemetry cache cleared.')),
-                              );
-                            },
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            icon: const Icon(Icons.refresh, size: 16),
-                            label: const Text('Force Ingest', style: TextStyle(fontSize: 12)),
-                            onPressed: () async {
-                              await env.fetchData();
-                              if (!ctx.mounted) return;
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Ingested latest cloud readings!')),
-                              );
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 16),
-                    Divider(color: isDark ? const Color(0xFF334155) : const Color(0xFFE2E8F0)),
-
-                    // 5. User Session & Logout
-                    ListTile(
-                      contentPadding: EdgeInsets.zero,
-                      leading: const Icon(Icons.logout, color: Color(0xFFEF4444)),
-                      title: Text(
-                        'Log Out (${env.username})',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: Color(0xFFEF4444),
-                        ),
-                      ),
-                      onTap: () {
-                        Navigator.pop(ctx);
-                        env.logout();
+                    ],
+                  ),
+                ),
+              ] else ...[
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('Temperature calibration',
+                        style: wx.t(14, w: FontWeight.w600, c: wx.accent)),
+                    Text(offText, style: wx.t(14, w: FontWeight.w500)),
+                  ],
+                ),
+                Slider(
+                  value: off,
+                  min: -5,
+                  max: 5,
+                  divisions: 20,
+                  label: offText,
+                  onChanged: (v) {
+                    env.setTemperatureOffset(v);
+                    setSheet(() {});
+                  },
+                ),
+                const SizedBox(height: 8),
+                Text('Gateway URL',
+                    style: wx.t(14, w: FontWeight.w600, c: wx.accent)),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: serverController,
+                  style: wx.t(13),
+                  decoration: wx.field('Gateway URL', hint: 'https://...').copyWith(
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save_outlined, size: 20),
+                      tooltip: 'Save gateway URL',
+                      onPressed: () {
+                        ApiService.setBaseUrl(serverController.text.trim());
+                        env.fetchData();
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Logged out. Switched to Guest Mode.')),
+                          const SnackBar(content: Text('Gateway URL saved')),
                         );
                       },
                     ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Text('Storage',
+                    style: wx.t(14, w: FontWeight.w600, c: wx.accent)),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        style: wx.outlineButton(wx.text),
+                        icon: const Icon(Icons.delete_sweep_outlined, size: 18),
+                        label: const Text('Clear'),
+                        onPressed: () async {
+                          await env.clearLocalStorage();
+                          if (!ctx.mounted) return;
+                          Navigator.pop(ctx);
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Saved readings cleared')),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: FilledButton.icon(
+                        style: wx.filledButton,
+                        icon: const Icon(Icons.refresh, size: 18),
+                        label: const Text('Sync'),
+                        onPressed: () async {
+                          await env.fetchData();
+                          if (!ctx.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Latest readings fetched')),
+                          );
+                        },
+                      ),
+                    ),
                   ],
                 ),
-              ),
-            );
-          },
-        );
-      },
+                const SizedBox(height: 12),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Icon(Icons.logout, color: wx.bad),
+                  title: Text('Log out (${env.username})',
+                      style: wx.t(14, w: FontWeight.w500, c: wx.bad)),
+                  onTap: () {
+                    Navigator.pop(ctx);
+                    env.logout();
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Logged out. Switched to guest mode.')),
+                    );
+                  },
+                ),
+              ],
+            ],
+          );
+        },
+      ),
     );
   }
 
-  // --- Clean User Login Sheet ---
-  void _showUserLoginSheet(BuildContext context, EnvironmentProvider env) {
-    final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
+  void _showLoginSheet(BuildContext context, EnvironmentProvider env) {
+    final wx = Wx.of(context);
     final userController = TextEditingController(text: 'irfan');
     final passController = TextEditingController(text: '1234');
     String? authError;
 
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: theme.cardColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (ctx, setSheetState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 20,
-                bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+    showWxSheet(
+      context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setSheet) => Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                WxIconDot(
+                  icon: env.isLoggedIn
+                      ? Icons.account_circle
+                      : Icons.account_circle_outlined,
+                  size: 44,
+                  color: env.isLoggedIn ? wx.good : null,
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    env.isLoggedIn ? env.username : 'Account',
+                    style: wx.t(22, w: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 6),
+            Text(
+              env.isLoggedIn
+                  ? 'Signed in.'
+                  : 'Sign in to access calibration and cloud settings.',
+              style: wx.t(13, c: wx.textDim),
+            ),
+            const SizedBox(height: 18),
+            if (env.isLoggedIn)
+              OutlinedButton.icon(
+                style: wx.outlineButton(wx.bad),
+                icon: const Icon(Icons.logout, size: 18),
+                label: const Text('Log out'),
+                onPressed: () async {
+                  await env.logout();
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Logged out. Switched to guest mode.')),
+                    );
+                  }
+                },
+              )
+            else ...[
+              if (authError != null) ...[
+                Text(authError!, style: wx.t(13, c: wx.bad)),
+                const SizedBox(height: 10),
+              ],
+              TextField(
+                controller: userController,
+                decoration: wx.field('Username', icon: Icons.person_outline),
               ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: passController,
+                obscureText: true,
+                decoration: wx.field('Password', icon: Icons.lock_outline),
+              ),
+              const SizedBox(height: 16),
+              FilledButton(
+                style: wx.filledButton,
+                onPressed: () async {
+                  final err = await env.login(
+                    userController.text.trim(),
+                    passController.text.trim(),
+                  );
+                  if (err != null) {
+                    setSheet(() => authError = err);
+                    return;
+                  }
+                  if (ctx.mounted) Navigator.pop(ctx);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text('Welcome, ${env.username}')),
+                    );
+                  }
+                },
+                child: const Text('Log in'),
+              ),
+              const SizedBox(height: 10),
+              Center(
+                child: Text('Demo: irfan / 1234 or admin / admin123',
+                    style: wx.t(12, c: wx.textDim)),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  Hero card — big temperature on a dusk-purple gradient
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Hero extends StatelessWidget {
+  const _Hero({
+    required this.env,
+    required this.onAccount,
+    required this.onSettings,
+  });
+  final EnvironmentProvider env;
+  final VoidCallback onAccount;
+  final VoidCallback onSettings;
+
+  @override
+  Widget build(BuildContext context) {
+    final wx = Wx.of(context);
+    final top = MediaQuery.of(context).padding.top;
+    final live = env.isEsp32Online ? env.indoorReading : null;
+    final out = env.outdoorReading;
+    const white = Colors.white;
+    final soft = Colors.white.withValues(alpha: 0.78);
+
+    final big = live == null ? '--' : live.temperature.toStringAsFixed(1);
+    final feels = live == null
+        ? 'Waiting for sensor'
+        : 'Feels like ${Wx.feelsLike(live.temperature, live.humidity).toStringAsFixed(1)}°';
+
+    return Container(
+      margin: EdgeInsets.fromLTRB(8, top + 8, 8, 0),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(32),
+        gradient: LinearGradient(
+          colors: wx.heroColors,
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(32),
+        child: Stack(
+          children: [
+            const Positioned.fill(child: WxSparkle()),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 8, 20),
               child: Column(
-                mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Center(
-                    child: Container(
-                      width: 40,
-                      height: 4,
-                      decoration: BoxDecoration(
-                        color: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
-                      Icon(
-                        env.isLoggedIn ? Icons.account_circle : Icons.account_circle_outlined,
-                        color: env.isLoggedIn ? const Color(0xFF10B981) : theme.colorScheme.primary,
-                        size: 28,
-                      ),
-                      const SizedBox(width: 10),
-                      Text(
-                        env.isLoggedIn ? 'Account: ${env.username}' : 'User Login',
-                        style: TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : const Color(0xFF0F172A),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              out?.city ?? 'Local Station',
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: wx.t(20, w: FontWeight.w500, c: white),
+                            ),
+                            const SizedBox(height: 4),
+                            Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: live != null
+                                        ? const Color(0xFF6EE7B7)
+                                        : const Color(0xFFFFB4AB),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                const SizedBox(width: 6),
+                                Text(
+                                  live != null
+                                      ? 'Sensor live'
+                                      : 'Sensor offline',
+                                  style: wx.t(12, c: soft),
+                                ),
+                              ],
+                            ),
+                          ],
                         ),
+                      ),
+                      IconButton(
+                        tooltip: env.isLoggedIn ? 'Account' : 'Log in',
+                        onPressed: onAccount,
+                        icon: Icon(
+                          env.isLoggedIn
+                              ? Icons.account_circle
+                              : Icons.account_circle_outlined,
+                          color: white,
+                        ),
+                      ),
+                      IconButton(
+                        tooltip: 'Settings',
+                        onPressed: onSettings,
+                        icon: const Icon(Icons.settings_outlined, color: white),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
-                  Text(
-                    env.isLoggedIn
-                        ? 'You are currently logged into the Environmental Monitoring Platform.'
-                        : 'Enter your credentials to sign into your user profile.',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B),
+                  Padding(
+                    padding: const EdgeInsets.only(right: 12),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                alignment: Alignment.centerLeft,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(big,
+                                        style: wx.t(88,
+                                            w: FontWeight.w300, c: white, h: 1.05)),
+                                    Padding(
+                                      padding: const EdgeInsets.only(top: 10),
+                                      child: Text('°',
+                                          style: wx.t(40, w: FontWeight.w300, c: white)),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Text(feels, style: wx.t(15, c: white)),
+                            ],
+                          ),
+                        ),
+                        Column(
+                          children: [
+                            WeatherGlyph(code: out?.weatherCode ?? 1, size: 100),
+                            const SizedBox(height: 2),
+                            Text('Outside: ${out?.weatherDesc ?? '--'}',
+                                style: wx.t(12, c: soft)),
+                          ],
+                        ),
+                      ],
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  if (env.isLoggedIn) ...[
-                    // Logged in view with clear Log Out button
-                    Container(
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF10B981).withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: const Color(0xFF10B981).withValues(alpha: 0.3)),
-                      ),
-                      child: Row(
-                        children: [
-                          const Icon(Icons.check_circle, color: Color(0xFF10B981), size: 18),
-                          const SizedBox(width: 8),
-                          Expanded(
-                            child: Text(
-                              'Signed in as ${env.username}',
-                              style: const TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.bold,
-                                color: Color(0xFF10B981),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFFEF4444),
-                          side: const BorderSide(color: Color(0xFFEF4444)),
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        icon: const Icon(Icons.logout, size: 18),
-                        label: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.bold)),
-                        onPressed: () async {
-                          await env.logout();
-                          if (ctx.mounted) Navigator.pop(ctx);
-                          if (context.mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Logged out. Switched to Guest Mode.')),
-                            );
-                          }
-                        },
-                      ),
-                    ),
-                  ] else ...[
-                    // Logged out form
-                    if (authError != null) ...[
-                      Text(
-                        authError!,
-                        style: const TextStyle(color: Color(0xFFEF4444), fontSize: 12),
-                      ),
-                      const SizedBox(height: 10),
-                    ],
-                    TextField(
-                      controller: userController,
-                      decoration: InputDecoration(
-                        labelText: 'Username',
-                        prefixIcon: const Icon(Icons.person_outline),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: passController,
-                      obscureText: true,
-                      decoration: InputDecoration(
-                        labelText: 'Password',
-                        prefixIcon: const Icon(Icons.lock_outline),
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: theme.colorScheme.primary,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 14),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                        ),
-                        onPressed: () async {
-                          final err = await env.login(
-                            userController.text.trim(),
-                            passController.text.trim(),
-                          );
-                          if (err != null) {
-                            setSheetState(() => authError = err);
-                          } else {
-                            if (ctx.mounted) Navigator.pop(ctx);
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text('Welcome, ${env.username}!')),
-                              );
-                            }
-                          }
-                        },
-                        child: const Text('Log In', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Center(
-                      child: Text(
-                        'Demo login: irfan / 1234 or admin / admin123',
-                        style: TextStyle(
-                          fontSize: 11,
-                          color: isDark ? const Color(0xFF64748B) : const Color(0xFF94A3B8),
-                        ),
-                      ),
-                    ),
-                  ],
                 ],
               ),
-            );
-          },
-        );
-      },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }

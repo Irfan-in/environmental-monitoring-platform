@@ -3,22 +3,19 @@
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+    <!-- Sun (offset top-right) -->
     <path
-        android:pathData="M 54,23 C 33,39 30,67 54,85 C 78,67 75,39 54,23 Z"
+        android:pathData="M 64,46 m -18,0 a 18,18 0 1,0 36,0 a 18,18 0 1,0 -36,0"
         android:fillColor="#FFFFFF" />
+    <!-- Cloud (front foreground) -->
     <path
-        android:pathData="M 23,56 L 43,56 L 49,42 L 58,69 L 64,51 L 68,56 L 85,56"
-        android:strokeColor="#0F0C18"
-        android:strokeWidth="5"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:pathData="M 23,56 L 43,56 L 49,42 L 58,69 L 64,51 L 68,56 L 85,56"
-        android:strokeColor="#FFFFFF"
-        android:strokeWidth="3"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
-    <path
-        android:pathData="M 49,42 m -2.5,0 a 2.5,2.5 0 1,0 5,0 a 2.5,2.5 0 1,0 -5,0"
+        android:pathData="M 36,74 
+            C 28,74 22,68 22,60 
+            C 22,53 27,47 34,46 
+            C 36,37 44,30 54,30 
+            C 63,30 71,36 73,45 
+            C 79,46 84,51 84,57 
+            C 84,65 77,74 68,74 
+            Z"
         android:fillColor="#FFFFFF" />
 </vector>

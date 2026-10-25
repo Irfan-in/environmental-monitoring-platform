@@ -63,3 +63,7 @@ Thumbs.db
 PHONE_DEMO_PACKAGE/
 all_yes.txt
 accept_licenses.ps1
+*.tmp
+screen_*.png
+phone_screen*.png
+kmeans_clustering_output.png

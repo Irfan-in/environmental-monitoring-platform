@@ -1,0 +1,482 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Master Reference & College Demo Guide - Environmental Monitoring Platform</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --card-border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --cyan: #38bdf8;
+      --amber: #fb923c;
+      --emerald: #10b981;
+      --rose: #f43f5e;
+      --code-bg: #090d16;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 24px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      padding: 32px 0 24px;
+      border-bottom: 1px solid var(--card-border);
+      margin-bottom: 32px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 9999px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+      background-color: rgba(56, 189, 248, 0.15);
+      color: var(--cyan);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      margin-bottom: 12px;
+    }
+
+    h1 {
+      font-size: 2.2rem;
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 8px;
+      line-height: 1.2;
+    }
+
+    .author-info {
+      color: var(--text-muted);
+      font-size: 0.95rem;
+    }
+
+    .author-info strong {
+      color: var(--cyan);
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 12px;
+      padding: 24px;
+      margin-bottom: 24px;
+      box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.2);
+    }
+
+    .card h2 {
+      font-size: 1.4rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: #fff;
+    }
+
+    .card h3 {
+      font-size: 1.1rem;
+      margin: 20px 0 10px;
+      color: var(--cyan);
+    }
+
+    p { margin-bottom: 12px; }
+
+    /* Code Blocks */
+    .code-box {
+      position: relative;
+      background: var(--code-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 16px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 0.88rem;
+      color: #e2e8f0;
+      overflow-x: auto;
+      margin: 12px 0 16px;
+      line-height: 1.5;
+    }
+
+    .copy-btn {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(51, 65, 85, 0.8);
+      color: #fff;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: var(--cyan);
+      color: #0f172a;
+      border-color: var(--cyan);
+      font-weight: 600;
+    }
+
+    /* Tables */
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 16px 0;
+      font-size: 0.9rem;
+    }
+
+    th, td {
+      padding: 12px 14px;
+      text-align: left;
+      border-bottom: 1px solid var(--card-border);
+    }
+
+    th {
+      background: rgba(15, 23, 42, 0.6);
+      color: var(--cyan);
+      font-weight: 600;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    /* Alert / Callout */
+    .callout {
+      border-left: 4px solid var(--amber);
+      background: rgba(251, 146, 60, 0.1);
+      padding: 14px 18px;
+      border-radius: 0 8px 8px 0;
+      margin: 16px 0;
+      font-size: 0.92rem;
+    }
+
+    .callout-success {
+      border-left-color: var(--emerald);
+      background: rgba(16, 185, 129, 0.1);
+    }
+
+    .pill {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      margin-right: 6px;
+    }
+    .pill-green { background: rgba(16, 185, 129, 0.2); color: var(--emerald); }
+    .pill-cyan { background: rgba(56, 189, 248, 0.2); color: var(--cyan); }
+    .pill-amber { background: rgba(251, 146, 60, 0.2); color: var(--amber); }
+
+    /* Steps */
+    ol, ul {
+      padding-left: 20px;
+      margin-bottom: 16px;
+    }
+    li { margin-bottom: 8px; }
+
+    /* Navigation shortcut pills */
+    .toc {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+    .toc a {
+      text-decoration: none;
+      color: var(--text-muted);
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      padding: 8px 14px;
+      border-radius: 20px;
+      font-size: 0.85rem;
+      transition: all 0.2s;
+    }
+    .toc a:hover {
+      color: #fff;
+      border-color: var(--cyan);
+      background: rgba(56, 189, 248, 0.1);
+    }
+
+    footer {
+      text-align: center;
+      padding: 32px 0;
+      border-top: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.85rem;
+      margin-top: 40px;
+    }
+  </style>
+</head>
+<body>
+
+<div class="container">
+
+  <!-- Header -->
+  <header>
+    <span class="badge">Offline-Ready Master Document</span>
+    <h1>Integrated Environmental Monitoring Platform</h1>
+    <p class="author-info">
+      <strong>Author:</strong> Mohammed Irfan KS &nbsp;|&nbsp;
+      <strong>Roll No:</strong> KCMIT25MCA-2011 &nbsp;|&nbsp;
+      <strong>Degree:</strong> MCA (3rd Semester) &nbsp;|&nbsp;
+      <strong>Repository:</strong> <a href="https://github.com/Irfan-in/environmental-monitoring-platform" target="_blank" style="color: var(--cyan); text-decoration: none;">github.com/Irfan-in/environmental-monitoring-platform</a>
+    </p>
+  </header>
+
+  <!-- Quick Navigation -->
+  <div class="toc">
+    <a href="#prompt">🚀 1. Antigravity Resume Prompt</a>
+    <a href="#commands">⚡ 2. Terminal Commands</a>
+    <a href="#android-studio">📱 3. Android Studio & Emulator</a>
+    <a href="#esp-emulation">🔬 4. ESP32 Emulation</a>
+    <a href="#demo-script">🎤 5. Teacher Demo Script</a>
+    <a href="#architecture">🏛️ 6. System Architecture</a>
+  </div>
+
+  <!-- SECTION 1: RESUME PROMPT -->
+  <section class="card" id="prompt">
+    <h2>🚀 1. Copy-Paste Resume Prompt for Antigravity at College</h2>
+    <p>When you open Antigravity on your college computer or laptop tomorrow, paste this into the chat to immediately resume with zero loss of context:</p>
+    
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>Hi Antigravity, I am Mohammed Irfan KS (MCA 3rd Sem). I am continuing my MCA project: "Integrated Environmental Monitoring Platform".
+
+GitHub Repository: https://github.com/Irfan-in/environmental-monitoring-platform.git
+
+Current Project State:
+- Hardware: ESP32 with DHT22 (GPIO 4) + SSD1306 OLED (I2C GPIO 21/22).
+- Backend: Python SQLite server with 24-hour Open-Meteo offline caching, alert threshold management, and disaster recovery sync endpoints.
+- Frontend: Flutter mobile dashboard with Dual-Series Diurnal Temperature Comparison Chart, offline forecast badge, and top-bar profile (RBAC: Admin vs Viewer).
+- Release APK: Compiled and tested (app-release.apk).
+- Deployment config: render.yaml ready for Render.com free cloud hosting.
+- Simulation: simulate_esp32.py (terminal OLED) and wokwi_diagram.json (browser circuit).
+
+Today's goals:
+1. Connect GitHub repo to Render.com for 24/7 free cloud hosting (so we can retire Pydroid 3).
+2. Test the app and ESP32 node.
+3. Prepare the demo flow for my teacher.
+
+Please inspect the workspace and guide me through the next step.</code></pre>
+    </div>
+  </section>
+
+  <!-- SECTION 2: COMMAND CHEAT SHEET -->
+  <section class="card" id="commands">
+    <h2>⚡ 2. Terminal Command Cheat Sheet</h2>
+    
+    <h3>Clone & Pull on a College PC</h3>
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>git clone https://github.com/Irfan-in/environmental-monitoring-platform.git
+cd environmental-monitoring-platform</code></pre>
+    </div>
+
+    <h3>Run Backend (FastAPI / Builtin Universal Server)</h3>
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>cd backend
+python run_server.py</code></pre>
+    </div>
+
+    <h3>Run ESP32 Hardware Simulator (ASCII Terminal OLED)</h3>
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>cd backend
+python simulate_esp32.py</code></pre>
+    </div>
+
+    <h3>Rebuild Flutter Release APK (Windows)</h3>
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>cd frontend
+flutter build apk --release</code></pre>
+    </div>
+  </section>
+
+  <!-- SECTION 3: ANDROID STUDIO & EMULATOR -->
+  <section class="card" id="android-studio">
+    <h2>📱 3. Running in Android Studio + Android Emulator</h2>
+    
+    <ol>
+      <li><strong>Open Project:</strong> Open Android Studio &rarr; Click <em>Open</em> &rarr; Select <code>environmental_monitoring_platform/frontend</code>.</li>
+      <li><strong>Boot Virtual Device:</strong> Open <em>Device Manager</em> &rarr; Click <strong>Play (▶)</strong> on your virtual Android device (Pixel 7 / API 34).</li>
+      <li><strong>Launch App:</strong> Select the running emulator from the device menu &rarr; Click the green <strong>Run (▶)</strong> button (or <code>Shift + F10</code>).</li>
+    </ol>
+
+    <div class="callout">
+      <strong>⚠️ Critical Emulator Rule (10.0.2.2 vs 127.0.0.1):</strong><br>
+      Inside the Android Emulator, your computer's <code>localhost</code> is <strong><code>10.0.2.2</code></strong>.<br>
+      In the app: Tap <strong>Alerts</strong> tab &rarr; Tap the settings icon (⚙️) &rarr; Set Server URL to <strong><code>http://10.0.2.2:8080</code></strong> &rarr; Tap <strong>Save & Reconnect</strong>.
+    </div>
+  </section>
+
+  <!-- SECTION 4: ESP32 EMULATION -->
+  <section class="card" id="esp-emulation">
+    <h2>🔬 4. ESP32 Hardware Emulation (Zero Hardware Needed)</h2>
+    
+    <h3>Method A: Terminal ESP32 Simulator (Instant 1-Click)</h3>
+    <p>Run <code>python simulate_esp32.py</code> in a separate terminal. It generates a live ASCII OLED box in the console and broadcasts real sensor telemetry every 3 seconds to the local backend.</p>
+
+    <h3>Method B: Wokwi Online Graphical Simulator (Interactive Circuit)</h3>
+    <ol>
+      <li>Navigate to <a href="https://wokwi.com/projects/new/esp32" target="_blank" style="color: var(--cyan);">wokwi.com/projects/new/esp32</a>.</li>
+      <li>Paste the code from <code>PHONE_DEMO_PACKAGE/esp32_sensor_node/esp32_sensor_node.ino</code> into the <strong>sketch.ino</strong> tab.</li>
+      <li>Click the <strong>diagram.json</strong> tab and paste the pre-wired configuration from <code>esp32/wokwi_diagram.json</code>:</li>
+    </ol>
+
+    <div class="code-box">
+      <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+      <pre><code>{
+  "version": 1,
+  "author": "Mohammed Irfan KS",
+  "editor": "wokwi",
+  "parts": [
+    { "type": "wokwi-esp32-devkit-v1", "id": "esp", "top": 0, "left": 0 },
+    { "type": "wokwi-dht22", "id": "dht", "top": -120, "left": -80, "attrs": { "temperature": "25.5", "humidity": "55" } },
+    { "type": "wokwi-ssd1306", "id": "oled", "top": -120, "left": 80, "attrs": { "i2cAddress": "0x3c" } }
+  ],
+  "connections": [
+    [ "dht:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "dht:GND", "esp:GND.1", "black", [ "v0" ] ],
+    [ "dht:SDA", "esp:D4", "green", [ "v0" ] ],
+    [ "oled:VCC", "esp:3V3", "red", [ "v0" ] ],
+    [ "oled:GND", "esp:GND.2", "black", [ "v0" ] ],
+    [ "oled:SDA", "esp:D21", "blue", [ "v0" ] ],
+    [ "oled:SCL", "esp:D22", "yellow", [ "v0" ] ]
+  ]
+}</code></pre>
+    </div>
+    <p>4. Hit <strong>Start Simulation (▶)</strong>. The virtual OLED lights up with your name, and dragging the DHT22 temperature slider immediately triggers threshold alerts!</p>
+  </section>
+
+  <!-- SECTION 5: TEACHER DEMO SCRIPT -->
+  <section class="card" id="demo-script">
+    <h2>🎤 5. Project Demonstration Script (Score Maximum Marks)</h2>
+
+    <p>Follow this exact 3-step script when presenting to your teacher:</p>
+
+    <h3>Feature 1: 24-Hour Offline Weather Caching (Store-and-Forward)</h3>
+    <ul>
+      <li><strong>What to say:</strong> <em>"Normal weather apps fail or show blank '-- °C' when disconnected. We implemented an offline-first Store-and-Forward cache that downloads 24-hour predictive Open-Meteo forecasts into SQLite. When offline, the dashboard continues calculating thermal comfort with a visual Cached badge."</em></li>
+      <li><strong>What to show:</strong> Turn off Wi-Fi on the phone. Show the outdoor card displaying <code>Cached (HH:mm)</code>.</li>
+    </ul>
+
+    <h3>Feature 2: Dual-Series Diurnal Comparison Chart</h3>
+    <ul>
+      <li><strong>What to say:</strong> <em>"This is our Dual-Series Diurnal Temperature Comparison Chart. It uses cubic Bezier spline smoothing to plot the indoor IoT sensor in Neon Cyan against outdoor diurnal variation in Sunset Amber over the 24-hour cycle. Touching the curve reveals real-time thermal variance (&Delta;T)."</em></li>
+      <li><strong>What to show:</strong> Open the <strong>Charts</strong> tab. Drag finger across the curve to demonstrate the crosshair and &Delta;T tooltip.</li>
+    </ul>
+
+    <h3>Feature 3: Non-Forced Profile & Role-Based Access Control (RBAC)</h3>
+    <ul>
+      <li><strong>What to say:</strong> <em>"We did not block the app with an annoying login wall. Local sensor monitoring is always open to anyone in Guest mode. However, modifying live environmental alert thresholds requires Administrator privileges."</em></li>
+      <li><strong>What to show:</strong>
+        <ol>
+          <li>Open <strong>Alerts</strong> tab &rarr; Tap Configure Thresholds (⚙️) &rarr; Shows <em>"Admin Access Required"</em> dialog.</li>
+          <li>Tap the Profile icon (👤) in the top AppBar &rarr; Tap <strong>"Fill Admin (Demo)"</strong> &rarr; Tap <strong>Log In</strong>.</li>
+          <li>Now open Configure Thresholds &rarr; Changes save successfully!</li>
+          <li>Tap <strong>Backup Now</strong> &rarr; SnackBar confirms encrypted cloud JSON snapshot generated.</li>
+        </ol>
+      </li>
+    </ul>
+
+    <div class="callout callout-success">
+      <strong>Demo Credentials:</strong><br>
+      • <span class="pill pill-green">ADMIN</span> <code>admin</code> / <code>admin123</code> (Can change temperature/humidity thresholds)<br>
+      • <span class="pill pill-cyan">VIEWER</span> <code>user</code> / <code>user123</code> (Read-only monitoring)<br>
+      • <span class="pill pill-amber">HOTSPOT</span> SSID: <code>Irfan</code> / Password: <code>11112222</code>
+    </div>
+  </section>
+
+  <!-- SECTION 6: ARCHITECTURE SCORECARD -->
+  <section class="card" id="architecture">
+    <h2>🏛️ 6. System Architecture & Hardware Pinout</h2>
+
+    <table>
+      <thead>
+        <tr>
+          <th>Component</th>
+          <th>Physical / Logical Pin</th>
+          <th>Role / Protocol</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><strong>DHT22 Data</strong></td>
+          <td>GPIO 4</td>
+          <td>Single-bus digital temperature & humidity reading</td>
+        </tr>
+        <tr>
+          <td><strong>SSD1306 OLED SDA</strong></td>
+          <td>GPIO 21</td>
+          <td>I2C Data line for 128x64 local display</td>
+        </tr>
+        <tr>
+          <td><strong>SSD1306 OLED SCL</strong></td>
+          <td>GPIO 22</td>
+          <td>I2C Clock line (Address <code>0x3C</code>)</td>
+        </tr>
+        <tr>
+          <td><strong>Gateway Discovery</strong></td>
+          <td><code>WiFi.gatewayIP()</code></td>
+          <td>Auto-targets phone IP on port 8080 (zero hardcoding)</td>
+        </tr>
+        <tr>
+          <td><strong>Backend Engine</strong></td>
+          <td>FastAPI + SQLite WAL</td>
+          <td>Universal runner (FastAPI or pure standard-library)</td>
+        </tr>
+        <tr>
+          <td><strong>Cloud Hosting</strong></td>
+          <td><code>render.yaml</code></td>
+          <td>Free 24/7 HTTPS deployment on Render.com</td>
+        </tr>
+      </tbody>
+    </table>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <p>Integrated Environmental Monitoring Platform &copy; 2026 Mohammed Irfan KS. All Rights Reserved.</p>
+    <p style="margin-top: 6px; font-size: 0.8rem;">Ready for MCA 3rd Semester Project Demonstration.</p>
+  </footer>
+
+</div>
+
+<script>
+  function copyCode(btn) {
+    const code = btn.nextElementSibling.querySelector('code').innerText;
+    navigator.clipboard.writeText(code).then(() => {
+      const originalText = btn.innerText;
+      btn.innerText = 'Copied!';
+      btn.style.background = '#10b981';
+      btn.style.color = '#fff';
+      setTimeout(() => {
+        btn.innerText = originalText;
+        btn.style.background = '';
+        btn.style.color = '';
+      }, 2000);
+    });
+  }
+</script>
+
+</body>
+</html>

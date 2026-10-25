@@ -1,3 +1,5 @@
+import 'chart_point.dart';
+
 class AlertItem {
   final int id;
   final String source;
@@ -30,9 +32,7 @@ class AlertItem {
       thresholdValue: (json['threshold_value'] as num?)?.toDouble() ?? 0.0,
       alertType: json['alert_type'] as String? ?? 'WARN',
       message: json['message'] as String? ?? '',
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      timestamp: ChartPoint.parseTimestamp(json['timestamp']),
       isAcknowledged: json['is_acknowledged'] as bool? ?? false,
     );
   }

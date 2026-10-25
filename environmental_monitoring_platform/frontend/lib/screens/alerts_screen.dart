@@ -30,12 +30,16 @@ class AlertsScreen extends StatelessWidget {
         ),
         actions: [
           IconButton(
-            icon: Icon(
-              Icons.settings_ethernet,
-              color: isDark ? Colors.white : const Color(0xFF0F172A),
-            ),
-            tooltip: 'Server Connection Settings',
-            onPressed: () => _showServerSettingsDialog(context),
+            icon: const Icon(Icons.done_all, color: Color(0xFF10B981)),
+            tooltip: 'Acknowledge All Alerts',
+            onPressed: () async {
+              await env.acknowledgeAllAlerts();
+              if (context.mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('All alerts acknowledged!')),
+                );
+              }
+            },
           ),
           IconButton(
             icon: Icon(
@@ -160,51 +164,6 @@ class AlertsScreen extends StatelessWidget {
     );
   }
 
-  void _showServerSettingsDialog(BuildContext context) {
-    final controller = TextEditingController(text: ApiService.baseUrl);
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF1E293B),
-        title: const Text('Backend Server URL', style: TextStyle(color: Colors.white)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const Text(
-              'Enter the backend IP/URL (e.g., http://192.168.1.50:8080 or http://10.0.2.2:8080 for emulator):',
-              style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: controller,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                border: OutlineInputBorder(),
-                labelText: 'Server URL',
-                labelStyle: TextStyle(color: Color(0xFF38BDF8)),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel'),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF38BDF8)),
-            onPressed: () {
-              ApiService.setBaseUrl(controller.text);
-              Provider.of<EnvironmentProvider>(context, listen: false).fetchData();
-              Navigator.pop(ctx);
-            },
-            child: const Text('Save & Reconnect', style: TextStyle(color: Color(0xFF0F172A))),
-          ),
-        ],
-      ),
-    );
-  }
 
   void _showThresholdSettingsDialog(BuildContext context) {
     final env = Provider.of<EnvironmentProvider>(context, listen: false);

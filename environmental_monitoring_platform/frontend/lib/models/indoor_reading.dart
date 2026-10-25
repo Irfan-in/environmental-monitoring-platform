@@ -1,3 +1,5 @@
+import 'chart_point.dart';
+
 class IndoorReading {
   final int id;
   final String deviceId;
@@ -19,9 +21,7 @@ class IndoorReading {
       deviceId: json['device_id'] as String? ?? 'esp32_unknown',
       temperature: (json['temperature'] as num?)?.toDouble() ?? 0.0,
       humidity: (json['humidity'] as num?)?.toDouble() ?? 0.0,
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      timestamp: ChartPoint.parseTimestamp(json['timestamp']),
     );
   }
 

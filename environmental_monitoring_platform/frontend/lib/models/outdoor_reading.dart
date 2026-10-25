@@ -1,3 +1,5 @@
+import 'chart_point.dart';
+
 class OutdoorReading {
   final int id;
   final String city;
@@ -38,12 +40,10 @@ class OutdoorReading {
       windSpeed: (json['wind_speed'] as num?)?.toDouble() ?? 0.0,
       weatherCode: json['weather_code'] as int? ?? 0,
       weatherDesc: json['weather_desc'] as String? ?? 'Fair',
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      timestamp: ChartPoint.parseTimestamp(json['timestamp']),
       isCached: json['is_cached'] as bool? ?? false,
       cachedAt: json['cached_at'] != null
-          ? DateTime.tryParse(json['cached_at'] as String)
+          ? ChartPoint.parseTimestamp(json['cached_at'])
           : null,
     );
   }

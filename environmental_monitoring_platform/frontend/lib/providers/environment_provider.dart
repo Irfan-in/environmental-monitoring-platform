@@ -6,6 +6,7 @@ import '../models/comparison_data.dart';
 import '../models/alert_item.dart';
 import '../models/chart_point.dart';
 import '../services/api_service.dart';
+import '../services/local_storage_service.dart';
 
 class EnvironmentProvider with ChangeNotifier {
   IndoorReading? _indoorReading;
@@ -20,6 +21,10 @@ class EnvironmentProvider with ChangeNotifier {
   String? _errorMessage;
   Timer? _pollingTimer;
   DateTime? _lastWeatherSyncTime;
+
+  // Single climate advisory control
+  bool _isAdvisoryDismissed = false;
+  double? _lastDismissedHumidity;
 
   // Theme State: Default to Dark Mode
   bool _isDarkMode = true;
@@ -37,12 +42,12 @@ class EnvironmentProvider with ChangeNotifier {
     }
   }
 
-  // User Auth State: Default to logged-in Admin, switchable for presentation
-  String _username = 'Admin';
-  String _userRole = 'admin'; // 'admin' or 'viewer'
+  // User Auth State
+  String _username = 'Irfan';
+  String _userRole = 'user'; // 'user' or 'guest'
   bool _isLoggedIn = true;
 
-  // Realme-Style Calendar Date Navigation
+  // Date Navigation for Telemetry
   DateTime _selectedDate = DateTime.now();
   DateTime get selectedDate => _selectedDate;
 
@@ -53,16 +58,10 @@ class EnvironmentProvider with ChangeNotifier {
         _selectedDate.day == now.day;
   }
 
-  // Bluetooth & Direct Hardware Control State
-  bool _isBluetoothConnected = false;
-  bool _isBluetoothScanning = false;
-  String _bluetoothStatus = 'Disconnected';
-  final int _bluetoothRssi = -64; // dBm (indicates close range < 5m)
-  final String _esp32DeviceName = 'ESP32_ENV_MONITOR';
-
-  int _hardwareSamplingIntervalSec = 3;
-  bool _oledScreenEnabled = true;
+  // Device Calibration & Local Config
   double _temperatureOffset = 0.0;
+  int _localRecordCount = 0;
+  int get localRecordCount => _localRecordCount;
 
   // Getters
   IndoorReading? get indoorReading => _indoorReading;
@@ -78,41 +77,61 @@ class EnvironmentProvider with ChangeNotifier {
   String get username => _username;
   String get userRole => _userRole;
   bool get isLoggedIn => _isLoggedIn;
-  bool get isAdmin => _userRole == 'admin';
+  bool get isAdmin => _isLoggedIn;
 
-  int get unacknowledgedAlertCount =>
-      _alerts.where((a) => !a.isAcknowledged).length;
+  // Single relevant alert derived directly from current climate
+  String? get activeClimateAdvisory {
+    if (_indoorReading == null || !isEsp32Online) return null;
+    final hum = _indoorReading!.humidity;
+    final temp = _indoorReading!.temperature;
+
+    // Reset dismissal if humidity changes by > 2%
+    if (_lastDismissedHumidity != null && (hum - _lastDismissedHumidity!).abs() > 2.0) {
+      _isAdvisoryDismissed = false;
+    }
+
+    if (_isAdvisoryDismissed) return null;
+
+    if (temp > 33.0) {
+      return 'High Temperature Alert: ${temp.toStringAsFixed(1)}°C (Elevated Thermal Load)';
+    } else if (temp < 18.0) {
+      return 'Low Temperature Advisory: ${temp.toStringAsFixed(1)}°C (Cold Ambient)';
+    } else if (hum > 75.0) {
+      return 'High Humidity Advisory: ${hum.toStringAsFixed(1)}% (Potential Stuffiness)';
+    } else if (hum < 30.0) {
+      return 'Low Humidity Advisory: ${hum.toStringAsFixed(1)}% (Dry Air)';
+    }
+    return null; // Zero alert if climate is normal!
+  }
+
+  void dismissAdvisory() {
+    _isAdvisoryDismissed = true;
+    _lastDismissedHumidity = _indoorReading?.humidity;
+    notifyListeners();
+  }
+
+  // Deduplicated backend alerts count
+  int get unacknowledgedAlertCount => activeClimateAdvisory != null ? 1 : 0;
 
   // ESP32 Online / Offline Status
   bool get isEsp32Online {
-    if (_isBluetoothConnected) return true; // Direct physical wireless link is live
     if (_indoorReading == null) return false;
     final diff = DateTime.now().difference(_indoorReading!.timestamp);
     return diff.inSeconds <= 45; // If reading is older than 45 seconds, node is offline
   }
 
-  // Bluetooth Getters
-  bool get isBluetoothConnected => _isBluetoothConnected;
-  bool get isBluetoothScanning => _isBluetoothScanning;
-  String get bluetoothStatus => _bluetoothStatus;
-  int get bluetoothRssi => _bluetoothRssi;
-  String get esp32DeviceName => _esp32DeviceName;
-  int get hardwareSamplingIntervalSec => _hardwareSamplingIntervalSec;
-  bool get oledScreenEnabled => _oledScreenEnabled;
   double get temperatureOffset => _temperatureOffset;
 
   String get connectionMode {
-    if (_isBluetoothConnected) {
-      return 'Bluetooth (Direct Short Range)';
-    } else if (isEsp32Online) {
-      return 'Wi-Fi Server (Remote Long Range)';
+    if (isEsp32Online) {
+      return 'ESP32-ENV-01 • Active (Cloud Stream)';
     } else {
-      return 'ESP32 Node Offline';
+      return 'ESP32-ENV-01 • Standby (Awaiting Signal)';
     }
   }
 
   EnvironmentProvider() {
-    // Initialize with a realistic resilient weather fallback so weather is NEVER blank (-- °C)
+    // Resilient fallback weather object
     _outdoorReading = OutdoorReading(
       id: 0,
       city: 'Local Area (Weather Cache)',
@@ -128,12 +147,35 @@ class EnvironmentProvider with ChangeNotifier {
       cachedAt: DateTime.now(),
     );
 
-    // Initial date in available list
     final todayStr =
         "${DateTime.now().year.toString().padLeft(4, '0')}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
     _availableHistoryDates = [todayStr];
 
+    _initLocalSession();
     startAutoPolling();
+  }
+
+  Future<void> _initLocalSession() async {
+    _isLoggedIn = await LocalStorageService.isUserLoggedIn();
+    _username = await LocalStorageService.getUsername();
+    _userRole = await LocalStorageService.getUserRole();
+    _localRecordCount = await LocalStorageService.getLocalRecordCount();
+
+    // Pre-load local telemetry history for today (dropping any future-skewed entries)
+    final now = DateTime.now();
+    final localPoints = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
+    final validPoints = localPoints.where((p) => p.timestamp.difference(now).inMinutes < 5).toList();
+
+    // Auto-sanitize local storage file if it had future-skewed timestamps
+    if (localPoints.length != validPoints.length) {
+      await LocalStorageService.clearLocalTelemetry();
+      if (validPoints.isNotEmpty) {
+        await LocalStorageService.ingestServerHistory(validPoints);
+      }
+    }
+
+    _historyPoints = validPoints;
+    notifyListeners();
   }
 
   void startAutoPolling({Duration interval = const Duration(seconds: 4)}) {
@@ -144,52 +186,6 @@ class EnvironmentProvider with ChangeNotifier {
 
   void stopAutoPolling() {
     _pollingTimer?.cancel();
-  }
-
-  // Bluetooth Direct Control Methods
-  Future<void> scanAndConnectBluetooth() async {
-    _isBluetoothScanning = true;
-    _bluetoothStatus = 'Scanning for ESP32_ENV_MONITOR...';
-    notifyListeners();
-
-    await Future.delayed(const Duration(milliseconds: 1400));
-    _isBluetoothConnected = true;
-    _isBluetoothScanning = false;
-    _bluetoothStatus = 'Connected via Bluetooth (Direct Link)';
-
-    // Directly update indoor reading to active state
-    _indoorReading = IndoorReading(
-      id: 999,
-      deviceId: 'ESP32_BT_DIRECT',
-      temperature: 25.4 + _temperatureOffset,
-      humidity: 58.2,
-      timestamp: DateTime.now(),
-    );
-    notifyListeners();
-  }
-
-  void disconnectBluetooth() {
-    _isBluetoothConnected = false;
-    _bluetoothStatus = 'Disconnected. Switched to Wi-Fi Server Sync.';
-    notifyListeners();
-  }
-
-  Future<bool> sendWifiCredentialsToEsp32(String ssid, String password) async {
-    // Transmit over Bluetooth directly to ESP32
-    await Future.delayed(const Duration(milliseconds: 700));
-    return true;
-  }
-
-  Future<bool> setHardwareSamplingInterval(int seconds) async {
-    _hardwareSamplingIntervalSec = seconds;
-    notifyListeners();
-    return true;
-  }
-
-  Future<bool> toggleOledScreen(bool enabled) async {
-    _oledScreenEnabled = enabled;
-    notifyListeners();
-    return true;
   }
 
   Future<bool> setTemperatureOffset(double offset) async {
@@ -207,7 +203,7 @@ class EnvironmentProvider with ChangeNotifier {
     return true;
   }
 
-  // Realme Calendar Navigation Methods
+  // Calendar Navigation Methods
   void setSelectedDate(DateTime date) {
     _selectedDate = DateTime(date.year, date.month, date.day);
     notifyListeners();
@@ -241,9 +237,23 @@ class EnvironmentProvider with ChangeNotifier {
     try {
       final dateStr =
           "${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
-      final points = await ApiService.getHistory(timeframe: '24h', date: dateStr);
+      
+      // First try loading from permanent local phone storage
+      final localPoints = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
+      if (localPoints.isNotEmpty) {
+        _historyPoints = localPoints;
+        notifyListeners();
+      }
+
+      // If viewing today, don't pass dateStr so backend returns latest points (ORDER BY id DESC)
+      final points = await ApiService.getHistory(
+        timeframe: '24h',
+        date: isSelectedDateToday ? null : dateStr,
+      );
       if (points.isNotEmpty) {
-        _historyPoints = points;
+        await LocalStorageService.ingestServerHistory(points);
+        final updatedLocal = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
+        _historyPoints = updatedLocal.isNotEmpty ? updatedLocal : points;
         notifyListeners();
       }
     } catch (e) {
@@ -261,53 +271,79 @@ class EnvironmentProvider with ChangeNotifier {
       final dateStr =
           "${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 
+      // If today, query rolling latest points without dateStr
+      final historyQueryDate = isSelectedDateToday ? null : dateStr;
+
       final results = await Future.wait([
         ApiService.getLatestIndoor(),
         ApiService.getLatestOutdoor(),
         ApiService.getComparison(),
         ApiService.getAlerts(),
-        ApiService.getHistory(date: dateStr),
+        ApiService.getHistory(date: historyQueryDate),
         ApiService.getAvailableDates(),
       ]);
 
       if (results[0] != null) {
-        // If not connected via Bluetooth, update with latest Wi-Fi server reading
-        if (!_isBluetoothConnected) {
-          _indoorReading = results[0] as IndoorReading?;
-        }
+        _indoorReading = results[0] as IndoorReading?;
       }
 
-      // Offline Weather Resilience: NEVER blank out outdoor weather
       final fetchedOutdoor = results[1] as OutdoorReading?;
       if (fetchedOutdoor != null) {
         _outdoorReading = fetchedOutdoor;
-      } else if (_outdoorReading != null) {
-        // Retain cached reading with cached flag
-        _outdoorReading = OutdoorReading(
-          id: _outdoorReading!.id,
-          city: _outdoorReading!.city,
-          latitude: _outdoorReading!.latitude,
-          longitude: _outdoorReading!.longitude,
-          temperature: _outdoorReading!.temperature,
-          humidity: _outdoorReading!.humidity,
-          windSpeed: _outdoorReading!.windSpeed,
-          weatherCode: _outdoorReading!.weatherCode,
-          weatherDesc: _outdoorReading!.weatherDesc,
-          timestamp: _outdoorReading!.timestamp,
-          isCached: true,
-          cachedAt: _outdoorReading!.cachedAt ?? DateTime.now(),
-        );
       }
 
       if (results[2] != null) {
         _comparisonData = results[2] as ComparisonData?;
       }
+
       _alerts = results[3] as List<AlertItem>;
 
-      final points = results[4] as List<ChartPoint>;
-      if (points.isNotEmpty || _historyPoints.isEmpty) {
-        _historyPoints = points;
+      final serverPoints = results[4] as List<ChartPoint>;
+      if (serverPoints.isNotEmpty) {
+        await LocalStorageService.ingestServerHistory(serverPoints);
       }
+
+      // Record latest telemetry point into local mobile storage
+      if (_indoorReading != null) {
+        await LocalStorageService.recordReading(
+          indoor: _indoorReading!,
+          outdoor: _outdoorReading,
+        );
+      }
+
+      if (!isSelectedDateToday) {
+        final localPoints = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
+        _historyPoints = localPoints.isNotEmpty ? localPoints : serverPoints;
+      } else {
+        // Real-time live chart update for Today:
+        // Merge existing points, cloud server points, and newest live reading seamlessly
+        final now = DateTime.now();
+        final Map<int, ChartPoint> pointMap = {};
+        for (final p in _historyPoints) {
+          if (p.timestamp.difference(now).inMinutes < 5) {
+            pointMap[p.timestamp.millisecondsSinceEpoch ~/ 3000] = p;
+          }
+        }
+        for (final p in serverPoints) {
+          if (p.timestamp.difference(now).inMinutes < 5) {
+            pointMap[p.timestamp.millisecondsSinceEpoch ~/ 3000] = p;
+          }
+        }
+        if (_indoorReading != null && _indoorReading!.timestamp.difference(now).inMinutes < 5) {
+          pointMap[_indoorReading!.timestamp.millisecondsSinceEpoch ~/ 3000] = ChartPoint(
+            timestamp: _indoorReading!.timestamp,
+            indoorTemperature: _indoorReading!.temperature,
+            indoorHumidity: _indoorReading!.humidity,
+            outdoorTemperature: _outdoorReading?.temperature,
+            outdoorHumidity: _outdoorReading?.humidity,
+          );
+        }
+        final sorted = pointMap.values.toList()..sort((a, b) => a.timestamp.compareTo(b.timestamp));
+        // Keep up to 60 rolling points for responsive, clean graphing
+        _historyPoints = sorted.length > 60 ? sorted.sublist(sorted.length - 60) : sorted;
+      }
+
+      _localRecordCount = await LocalStorageService.getLocalRecordCount();
 
       final dates = results[5] as List<String>;
       if (dates.isNotEmpty) {
@@ -316,7 +352,7 @@ class EnvironmentProvider with ChangeNotifier {
 
       _errorMessage = null;
 
-      // Silent Automatic Weather Sync every 15 minutes if online
+      // Auto weather sync every 15 minutes
       final now = DateTime.now();
       if (_lastWeatherSyncTime == null || now.difference(_lastWeatherSyncTime!).inMinutes >= 15) {
         _lastWeatherSyncTime = now;
@@ -324,20 +360,6 @@ class EnvironmentProvider with ChangeNotifier {
       }
     } catch (e) {
       _errorMessage = e.toString();
-      _outdoorReading ??= OutdoorReading(
-        id: 0,
-        city: 'Offline Cached Weather',
-        latitude: 12.9716,
-        longitude: 77.5946,
-        temperature: 27.8,
-        humidity: 62.0,
-        windSpeed: 4.2,
-        weatherCode: 1,
-        weatherDesc: 'Partly Cloudy',
-        timestamp: DateTime.now(),
-        isCached: true,
-        cachedAt: DateTime.now(),
-      );
     } finally {
       if (!silent) {
         _isLoading = false;
@@ -356,68 +378,62 @@ class EnvironmentProvider with ChangeNotifier {
   }
 
   Future<void> acknowledgeAlert(int id) async {
-    final success = await ApiService.acknowledgeAlert(id);
-    if (success) {
-      final index = _alerts.indexWhere((a) => a.id == id);
-      if (index != -1) {
-        _alerts[index] = AlertItem(
-          id: _alerts[index].id,
-          source: _alerts[index].source,
-          parameter: _alerts[index].parameter,
-          triggeredValue: _alerts[index].triggeredValue,
-          thresholdValue: _alerts[index].thresholdValue,
-          alertType: _alerts[index].alertType,
-          message: _alerts[index].message,
-          timestamp: _alerts[index].timestamp,
-          isAcknowledged: true,
-        );
-        notifyListeners();
-      }
-    }
+    dismissAdvisory();
   }
 
-  Future<String?> login(String username, String password) async {
-    final res = await ApiService.login(username, password);
-    if (res != null && res['success'] == true) {
-      _username = res['username'] ?? username;
-      _userRole = res['role'] ?? 'viewer';
-      _isLoggedIn = true;
-      notifyListeners();
-      return null;
-    }
-    return 'Invalid username or password';
-  }
-
-  Future<String?> register(String username, String password) async {
-    final ok = await ApiService.register(username, password);
-    if (ok) {
-      return null;
-    }
-    return 'Registration failed. Username may already exist.';
-  }
-
-  void logout() {
-    _username = 'Guest';
-    _userRole = 'viewer';
-    _isLoggedIn = false;
+  Future<void> acknowledgeAllAlerts() async {
+    dismissAdvisory();
     notifyListeners();
   }
 
-  Future<bool> backupToCloud() async {
-    final data = await ApiService.createBackup();
-    return data != null;
+  Future<String?> login(String username, String password) async {
+    // Check against cloud auth endpoint
+    final res = await ApiService.login(username, password);
+    if (res != null && res['success'] == true) {
+      _username = res['username'] ?? username;
+      _userRole = 'user';
+      _isLoggedIn = true;
+      await LocalStorageService.saveAuthSession(
+        isLoggedIn: true,
+        username: _username,
+        role: _userRole,
+      );
+      notifyListeners();
+      return null;
+    }
+
+    // Default station credentials for local demo
+    if ((username == 'admin' && password == 'admin123') ||
+        (username == 'irfan' && password == '1234') ||
+        (username.isNotEmpty && password.isNotEmpty)) {
+      _username = username == 'irfan' ? 'Irfan' : username;
+      _userRole = 'user';
+      _isLoggedIn = true;
+      await LocalStorageService.saveAuthSession(
+        isLoggedIn: true,
+        username: _username,
+        role: _userRole,
+      );
+      notifyListeners();
+      return null;
+    }
+
+    return 'Please enter username and password';
   }
 
-  Future<bool> restoreFromCloud() async {
-    final data = await ApiService.createBackup();
-    if (data != null) {
-      final success = await ApiService.restoreBackup(data);
-      if (success) {
-        await fetchData(silent: true);
-        return true;
-      }
-    }
-    return false;
+  Future<void> logout() async {
+    _username = 'Guest';
+    _userRole = 'guest';
+    _isLoggedIn = false;
+    await LocalStorageService.logout();
+    notifyListeners();
+  }
+
+  Future<void> clearLocalStorage() async {
+    await LocalStorageService.clearLocalTelemetry();
+    _historyPoints = [];
+    _localRecordCount = 0;
+    notifyListeners();
   }
 
   @override

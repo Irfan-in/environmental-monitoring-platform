@@ -13,15 +13,32 @@ class ChartPoint {
     this.outdoorHumidity,
   });
 
+  static DateTime parseTimestamp(dynamic raw) {
+    if (raw == null) return DateTime.now();
+    final str = raw.toString().trim();
+    if (str.isEmpty) return DateTime.now();
+    final parsed = DateTime.tryParse(str);
+    if (parsed != null) {
+      return parsed.toLocal();
+    }
+    return DateTime.now();
+  }
+
   factory ChartPoint.fromJson(Map<String, dynamic> json) {
     return ChartPoint(
-      timestamp: json['timestamp'] != null
-          ? DateTime.tryParse(json['timestamp'] as String) ?? DateTime.now()
-          : DateTime.now(),
+      timestamp: parseTimestamp(json['timestamp']),
       indoorTemperature: (json['indoor_temperature'] as num?)?.toDouble(),
       indoorHumidity: (json['indoor_humidity'] as num?)?.toDouble(),
       outdoorTemperature: (json['outdoor_temperature'] as num?)?.toDouble(),
       outdoorHumidity: (json['outdoor_humidity'] as num?)?.toDouble(),
     );
   }
+
+  Map<String, dynamic> toJson() => {
+    'timestamp': timestamp.toIso8601String(),
+    'indoor_temperature': indoorTemperature,
+    'indoor_humidity': indoorHumidity,
+    'outdoor_temperature': outdoorTemperature,
+    'outdoor_humidity': outdoorHumidity,
+  };
 }

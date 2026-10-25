@@ -855,9 +855,33 @@ class _Hero extends StatelessWidget {
                         Column(
                           children: [
                             WeatherGlyph(code: out?.weatherCode ?? 1, size: 100),
-                            const SizedBox(height: 2),
-                            Text('Outside: ${(out?.weatherDesc ?? '--').replaceAll(RegExp(r'\s*\([^)]*\)'), '').trim()}',
-                                style: wx.t(12, c: soft)),
+                            const SizedBox(height: 3),
+                            Builder(
+                              builder: (_) {
+                                final t = out?.temperature;
+                                final outTemp = t != null
+                                    ? '${t.toStringAsFixed(t.truncateToDouble() == t ? 0 : 1)}°C'
+                                    : '--';
+                                final cleanDesc = (out?.weatherDesc ?? '--')
+                                    .replaceAll(RegExp(r'\s*\([^)]*\)'), '')
+                                    .trim();
+                                return Text.rich(
+                                  TextSpan(
+                                    children: [
+                                      TextSpan(
+                                        text: '$outTemp  ',
+                                        style: wx.t(13, w: FontWeight.w700, c: white),
+                                      ),
+                                      TextSpan(
+                                        text: cleanDesc,
+                                        style: wx.t(12, w: FontWeight.w400, c: soft),
+                                      ),
+                                    ],
+                                  ),
+                                  textAlign: TextAlign.center,
+                                );
+                              },
+                            ),
                           ],
                         ),
                       ],

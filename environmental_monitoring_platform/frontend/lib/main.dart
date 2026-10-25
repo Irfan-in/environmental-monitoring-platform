@@ -24,7 +24,7 @@ class EnvironmentalMonitoringApp extends StatelessWidget {
           final darkBase = WxTheme.build(Brightness.dark, env.accentTheme);
           final lightBase = WxTheme.build(Brightness.light, env.accentTheme);
           return MaterialApp(
-            title: 'Environmental Monitor',
+            title: 'IEMP',
             debugShowCheckedModeBanner: false,
             themeMode: env.themeMode,
             darkTheme: darkBase.copyWith(

@@ -1,0 +1,25 @@
+=== IEMP APP ICON DESIGN SPECIFICATIONS ===
+
+1. File Format:
+   - Format: PNG (.png)
+   - Filename: Name your design "icon.png" or "app_icon.png"
+
+2. Recommended Canvas Dimensions:
+   - 512 x 512 pixels (standard Android master icon size)
+   - Or 1024 x 1024 pixels
+
+3. Safe Zone Guidelines:
+   - Android applies masks (circles on Pixel, squircles on Samsung Galaxy).
+   - Keep your main symbol or logo centered within the inner 70% (radius ~180px from center).
+   - Check the included "template_icon_512x512.png" for the safe zone outline circle.
+
+4. Background:
+   - You can either provide a solid background (e.g. dark #120E1E or colored)
+   - OR a transparent background with just your emblem/logo (we can auto-blend it with the theme).
+
+5. Next Step:
+   - Design your icon in Photoshop, Figma, Canva, Illustrator, or any tool.
+   - Save the file here as:
+     c:\project\Irfan\redesign_workspace\input\icon.png
+     (or c:\project\Irfan\redesign_workspace\output\icon.png)
+   - Reply in the chat: "Done, integrate icon" and I will slice it into all Android densities and compile the APK!

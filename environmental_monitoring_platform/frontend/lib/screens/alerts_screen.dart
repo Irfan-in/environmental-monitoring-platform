@@ -34,7 +34,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
       body: SafeArea(
         bottom: false,
         child: ListView(
-          padding: const EdgeInsets.fromLTRB(16, 8, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
           children: [
             Row(
               children: [

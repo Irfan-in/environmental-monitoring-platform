@@ -59,7 +59,7 @@ class _ChartsScreenState extends State<ChartsScreen> {
       body: SafeArea(
         bottom: false,
         child: SingleChildScrollView(
-          padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 110),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -275,70 +275,77 @@ class _ChartsScreenState extends State<ChartsScreen> {
       (i) => DateTime.now().subtract(Duration(days: 5 - i)),
     );
 
-    return SizedBox(
-      height: 110,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        itemCount: days.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, idx) {
-          final d = days[idx];
-          final isSelected = d.year == selectedDate.year &&
-              d.month == selectedDate.month &&
-              d.day == selectedDate.day;
+    return Row(
+      children: [
+        for (int idx = 0; idx < days.length; idx++) ...[
+          if (idx > 0) const SizedBox(width: 6),
+          Expanded(
+            child: Builder(
+              builder: (_) {
+                final d = days[idx];
+                final isSelected = d.year == selectedDate.year &&
+                    d.month == selectedDate.month &&
+                    d.day == selectedDate.day;
 
-          return GestureDetector(
-            onTap: () => env.setSelectedDate(d),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              width: 54,
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(
-                color: isSelected ? wx.accent : wx.card,
-                borderRadius: BorderRadius.circular(28),
-              ),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  Text(
-                    '${d.day}',
-                    style: wx.t(
-                      14,
-                      w: FontWeight.w800,
-                      c: isSelected ? wx.onAccent : wx.text,
+                return GestureDetector(
+                  onTap: () => env.setSelectedDate(d),
+                  child: AnimatedContainer(
+                    duration: const Duration(milliseconds: 200),
+                    height: 104,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    decoration: BoxDecoration(
+                      color: isSelected ? wx.accent : wx.card,
+                      borderRadius: BorderRadius.circular(22),
+                      border: Border.all(
+                        color: isSelected ? wx.accent : wx.cardBorder,
+                        width: 1,
+                      ),
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          '${d.day}',
+                          style: wx.t(
+                            13,
+                            w: FontWeight.w800,
+                            c: isSelected ? wx.onAccent : wx.text,
+                          ),
+                        ),
+                        Text(
+                          DateFormat('MMM').format(d),
+                          style: wx.t(
+                            10,
+                            w: FontWeight.w500,
+                            c: isSelected
+                                ? wx.onAccent.withValues(alpha: 0.8)
+                                : wx.textDim,
+                          ),
+                        ),
+                        Icon(
+                          Icons.wb_sunny_rounded,
+                          size: 16,
+                          color: isSelected
+                              ? wx.onAccent
+                              : const Color(0xFFF59E0B),
+                        ),
+                        Text(
+                          DateFormat('E').format(d),
+                          style: wx.t(
+                            11,
+                            w: FontWeight.w700,
+                            c: isSelected ? wx.onAccent : wx.text,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Text(
-                    DateFormat('MMM').format(d),
-                    style: wx.t(
-                      10,
-                      w: FontWeight.w500,
-                      c: isSelected
-                          ? wx.onAccent.withValues(alpha: 0.8)
-                          : wx.textDim,
-                    ),
-                  ),
-                  Icon(
-                    Icons.wb_sunny_rounded,
-                    size: 18,
-                    color: isSelected
-                        ? wx.onAccent
-                        : const Color(0xFFF59E0B),
-                  ),
-                  Text(
-                    DateFormat('E').format(d),
-                    style: wx.t(
-                      11,
-                      w: FontWeight.w700,
-                      c: isSelected ? wx.onAccent : wx.text,
-                    ),
-                  ),
-                ],
-              ),
+                );
+              },
             ),
-          );
-        },
-      ),
+          ),
+        ],
+      ],
     );
   }
 

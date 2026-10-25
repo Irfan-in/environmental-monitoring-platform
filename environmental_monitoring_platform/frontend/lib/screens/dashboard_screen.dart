@@ -37,7 +37,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
               onSettings: () => _showSettingsSheet(context, env),
             ),
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 110),
               child: Column(
                 children: [
                   if (advisory != null) ...[

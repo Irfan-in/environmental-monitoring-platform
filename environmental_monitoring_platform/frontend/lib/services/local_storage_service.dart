@@ -129,6 +129,7 @@ class LocalStorageService {
     try {
       final file = await _getFile();
       final content = await file.readAsString();
+      if (content.trim().isEmpty) return [];
       final list = jsonDecode(content) as List<dynamic>;
       final date = targetDate ?? DateTime.now();
 

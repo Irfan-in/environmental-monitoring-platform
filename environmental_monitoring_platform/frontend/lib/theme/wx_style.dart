@@ -944,36 +944,20 @@ class WxTrendChart extends StatelessWidget {
       final p = points[i];
       final double? a = temperature ? p.indoorTemperature : p.indoorHumidity;
       final double? b = temperature ? p.outdoorTemperature : p.outdoorHumidity;
-      final t = p.timestamp.toLocal();
-      final x = t.hour + (t.minute / 60.0) + (t.second / 3600.0);
       if (showIndoor && a != null) {
-        inSpots.add(FlSpot(x, a));
+        inSpots.add(FlSpot(i.toDouble(), a));
         lo = math.min(lo, a);
         hi = math.max(hi, a);
       }
       if (showOutdoor && b != null) {
-        outSpots.add(FlSpot(x, b));
+        outSpots.add(FlSpot(i.toDouble(), b));
         lo = math.min(lo, b);
         hi = math.max(hi, b);
       }
     }
 
-    List<FlSpot> cleanSpots(List<FlSpot> spots) {
-      if (spots.isEmpty) return [];
-      spots.sort((a, b) => a.x.compareTo(b.x));
-      final List<FlSpot> cleaned = [];
-      for (final s in spots) {
-        if (cleaned.isEmpty || (s.x - cleaned.last.x).abs() > 0.05) {
-          cleaned.add(s);
-        } else {
-          cleaned[cleaned.length - 1] = s;
-        }
-      }
-      return cleaned;
-    }
-
-    final cleanInSpots = cleanSpots(inSpots);
-    final cleanOutSpots = cleanSpots(outSpots);
+    final cleanInSpots = inSpots;
+    final cleanOutSpots = outSpots;
 
     if (inSpots.isEmpty && outSpots.isEmpty) {
       return SizedBox(
@@ -1026,14 +1010,6 @@ class WxTrendChart extends StatelessWidget {
       colors.add(wx.outdoorLine);
     }
 
-    String timeAtHour(double x) {
-      final clamped = x.clamp(0.0, 24.0);
-      final totalMin = (clamped * 60).round();
-      final h = (totalMin ~/ 60) % 24;
-      final m = totalMin % 60;
-      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
-    }
-
     final axis = wx.t(11, c: wx.textDim);
 
     return SizedBox(
@@ -1041,7 +1017,7 @@ class WxTrendChart extends StatelessWidget {
       child: LineChart(
         LineChartData(
           minX: 0.0,
-          maxX: 24.0,
+          maxX: math.max(1, points.length - 1).toDouble(),
           minY: minY,
           maxY: maxY,
           borderData: FlBorderData(show: false),
@@ -1070,11 +1046,14 @@ class WxTrendChart extends StatelessWidget {
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 24,
-                interval: 6.0,
+                interval: math.max(1, ((points.length - 1) / 3).floor()).toDouble(),
                 getTitlesWidget: (v, meta) {
-                  final h = v.toInt();
-                  if (h == 0 || h == 6 || h == 12 || h == 18 || h == 24) {
-                    return Text('${h.toString().padLeft(2, '0')}:00', style: axis);
+                  final idx = v.toInt();
+                  if (idx >= 0 && idx < points.length) {
+                    final t = points[idx].timestamp.toLocal();
+                    final h = t.hour.toString().padLeft(2, '0');
+                    final m = t.minute.toString().padLeft(2, '0');
+                    return Text('$h:$m', style: axis);
                   }
                   return const SizedBox();
                 },
@@ -1111,7 +1090,9 @@ class WxTrendChart extends StatelessWidget {
                     children: k == 0
                         ? [
                             TextSpan(
-                              text: '  ${timeAtHour(spots[k].x)}',
+                              text: spots[k].x.toInt() < points.length
+                                  ? '  ${points[spots[k].x.toInt()].timestamp.toLocal().hour.toString().padLeft(2, '0')}:${points[spots[k].x.toInt()].timestamp.toLocal().minute.toString().padLeft(2, '0')}'
+                                  : '',
                               style: wx.t(11, c: wx.textDim),
                             ),
                           ]

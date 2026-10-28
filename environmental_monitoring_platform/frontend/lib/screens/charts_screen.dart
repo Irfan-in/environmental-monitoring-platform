@@ -39,11 +39,12 @@ class _ChartsScreenState extends State<ChartsScreen> {
     double? latestDelta;
 
     if (displayPoints.isNotEmpty) {
-      final last = displayPoints.last;
-      latestIn =
-          _showTemperature ? last.indoorTemperature : last.indoorHumidity;
-      latestOut =
-          _showTemperature ? last.outdoorTemperature : last.outdoorHumidity;
+      for (int i = displayPoints.length - 1; i >= 0; i--) {
+        final p = displayPoints[i];
+        latestIn ??= _showTemperature ? p.indoorTemperature : p.indoorHumidity;
+        latestOut ??= _showTemperature ? p.outdoorTemperature : p.outdoorHumidity;
+        if (latestIn != null && latestOut != null) break;
+      }
       if (latestIn != null && latestOut != null) {
         latestDelta = latestIn - latestOut;
       }

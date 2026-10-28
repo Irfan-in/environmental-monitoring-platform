@@ -69,6 +69,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ── data helpers ───────────────────────────────────────────────────────────
 
   List<ChartPoint> _todayPoints(EnvironmentProvider env) {
+    if (env.recentTrendPoints.isNotEmpty) {
+      return env.recentTrendPoints;
+    }
     return env.historyPoints;
   }
 
@@ -225,46 +228,25 @@ class _DashboardScreenState extends State<DashboardScreen> {
         ],
       );
 
-  Widget _archiveNote(Wx wx, EnvironmentProvider env) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Showing ${DateFormat('d MMM').format(env.selectedDate)}. '
-          'Switch back to see today’s live readings.',
-          style: wx.t(13, c: wx.textDim),
-        ),
-        TextButton(
-          onPressed: env.resetToToday,
-          style: TextButton.styleFrom(padding: EdgeInsets.zero),
-          child: Text('Back to today',
-              style: wx.t(13, w: FontWeight.w600, c: wx.accent)),
-        ),
-      ],
-    );
-  }
 
 
 
   Widget _trendCard(Wx wx, EnvironmentProvider env, List<ChartPoint> pts) {
-    final title = _view == 0 ? 'Indoor trend' : 'Outdoor trend';
+    final title = _view == 0 ? 'Indoor trend (Last 30m)' : 'Outdoor trend (Last 30m)';
     return WxCard(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           WxCardTitle(icon: Icons.show_chart, title: title),
           const SizedBox(height: 16),
-          if (!env.isSelectedDateToday)
-            _archiveNote(wx, env)
-          else ...[
-            WxTrendChart(
-              points: pts,
-              temperature: true,
-              showIndoor: _view == 0,
-              showOutdoor: _view == 1,
-              height: 170,
-            ),
-          ],
+          WxTrendChart(
+            points: pts,
+            temperature: true,
+            showIndoor: _view == 0,
+            showOutdoor: _view == 1,
+            height: 185,
+          ),
+          const SizedBox(height: 6),
         ],
       ),
     );

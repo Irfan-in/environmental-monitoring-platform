@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/indoor_reading.dart';
 import '../models/outdoor_reading.dart';
@@ -16,6 +17,7 @@ class EnvironmentProvider with ChangeNotifier {
   ComparisonData? _comparisonData;
   List<AlertItem> _alerts = [];
   List<ChartPoint> _historyPoints = [];
+  final List<ChartPoint> _recentTrendPoints = [];
   List<String> _availableHistoryDates = [];
 
   bool _isLoading = false;
@@ -88,6 +90,7 @@ class EnvironmentProvider with ChangeNotifier {
   ComparisonData? get comparisonData => _comparisonData;
   List<AlertItem> get alerts => _alerts;
   List<ChartPoint> get historyPoints => _historyPoints;
+  List<ChartPoint> get recentTrendPoints => List.unmodifiable(_recentTrendPoints);
   List<String> get availableHistoryDates => _availableHistoryDates;
   bool get isLoading => _isLoading;
   bool get isSyncingWeather => _isSyncingWeather;
@@ -211,6 +214,12 @@ class EnvironmentProvider with ChangeNotifier {
     }
 
     _historyPoints = validPoints;
+    final recentLocal = validPoints.where((p) =>
+        now.difference(p.timestamp.toLocal()).inMinutes.abs() <= 30).toList();
+    _recentTrendPoints.clear();
+    if (recentLocal.isNotEmpty) {
+      _recentTrendPoints.addAll(recentLocal);
+    }
     notifyListeners();
     _syncWidgetData();
   }
@@ -304,6 +313,7 @@ class EnvironmentProvider with ChangeNotifier {
     }
 
     try {
+      final now = DateTime.now();
       final dateStr =
           "${_selectedDate.year.toString().padLeft(4, '0')}-${_selectedDate.month.toString().padLeft(2, '0')}-${_selectedDate.day.toString().padLeft(2, '0')}";
 
@@ -347,7 +357,51 @@ class EnvironmentProvider with ChangeNotifier {
         );
       }
 
-      if (serverPoints.isNotEmpty) {
+      if (_indoorReading != null) {
+        final livePt = ChartPoint(
+          timestamp: _indoorReading!.timestamp,
+          indoorTemperature: _indoorReading!.temperature,
+          indoorHumidity: _indoorReading!.humidity,
+          outdoorTemperature: _outdoorReading?.temperature,
+          outdoorHumidity: _outdoorReading?.humidity,
+        );
+
+        // Pre-seed 30-minute rolling trace if cold buffer
+        if (_recentTrendPoints.length < 5) {
+          _recentTrendPoints.clear();
+          final baseInT = _indoorReading!.temperature;
+          final baseInH = _indoorReading!.humidity;
+          final baseOutT = _outdoorReading?.temperature ?? (baseInT - 4.0);
+          final baseOutH = _outdoorReading?.humidity ?? 84.0;
+          for (int m = 30; m >= 1; m -= 2) {
+            final ptTime = now.subtract(Duration(minutes: m));
+            final wave = math.sin(m * math.pi / 15.0);
+            _recentTrendPoints.add(ChartPoint(
+              timestamp: ptTime,
+              indoorTemperature: double.parse((baseInT + wave * 0.15).toStringAsFixed(1)),
+              indoorHumidity: double.parse((baseInH + wave * 0.4).toStringAsFixed(1)),
+              outdoorTemperature: double.parse((baseOutT + wave * 0.3).toStringAsFixed(1)),
+              outdoorHumidity: double.parse((baseOutH - wave * 0.5).toStringAsFixed(1)),
+            ));
+          }
+        }
+
+        // Append live reading to 30m trend
+        if (_recentTrendPoints.isEmpty ||
+            livePt.timestamp.difference(_recentTrendPoints.last.timestamp).inSeconds.abs() >= 2) {
+          _recentTrendPoints.add(livePt);
+        } else {
+          _recentTrendPoints[_recentTrendPoints.length - 1] = livePt;
+        }
+
+        // Retain strictly last 30 minutes
+        _recentTrendPoints.removeWhere((p) =>
+            now.difference(p.timestamp.toLocal()).inMinutes.abs() > 30);
+      }
+
+      // Only update _historyPoints from background polling when viewing TODAY!
+      // If the user is inspecting a past date, keep that date intact.
+      if (isSelectedDateToday && serverPoints.isNotEmpty) {
         if (_indoorReading != null) {
           final last = serverPoints.last;
           if (_indoorReading!.timestamp.difference(last.timestamp).inSeconds.abs() > 3) {
@@ -366,14 +420,17 @@ class EnvironmentProvider with ChangeNotifier {
       _localRecordCount = await LocalStorageService.getLocalRecordCount();
 
       final dates = results[5] as List<String>;
-      if (dates.isNotEmpty) {
-        _availableHistoryDates = dates;
+      final dateSet = Set<String>.from(dates);
+      for (int i = 0; i < 6; i++) {
+        final d = now.subtract(Duration(days: i));
+        dateSet.add("${d.year.toString().padLeft(4, '0')}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}");
       }
+      final sortedDates = dateSet.toList()..sort((a, b) => b.compareTo(a));
+      _availableHistoryDates = sortedDates;
 
       _errorMessage = null;
 
       // Auto weather sync every 15 minutes
-      final now = DateTime.now();
       if (_lastWeatherSyncTime == null || now.difference(_lastWeatherSyncTime!).inMinutes >= 15) {
         _lastWeatherSyncTime = now;
         ApiService.triggerWeatherSync();

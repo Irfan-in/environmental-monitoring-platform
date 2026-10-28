@@ -18,7 +18,7 @@ def get_history_dates():
 @router.get("", response_model=HistoryResponse)
 def get_history(
     timeframe: str = Query("24h", description="Time window: 1h, 24h, or 7d"),
-    limit: int = Query(50, description="Max points to return"),
+    limit: int = Query(500, description="Max points to return"),
     date: Optional[str] = Query(None, description="Target calendar date (YYYY-MM-DD)")
 ):
     """

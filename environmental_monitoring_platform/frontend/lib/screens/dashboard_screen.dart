@@ -69,11 +69,7 @@ class _DashboardScreenState extends State<DashboardScreen> {
   // ── data helpers ───────────────────────────────────────────────────────────
 
   List<ChartPoint> _todayPoints(EnvironmentProvider env) {
-    if (!env.isSelectedDateToday) return const [];
-    final now = DateTime.now();
-    return env.historyPoints
-        .where((p) => p.timestamp.difference(now).inMinutes < 5)
-        .toList();
+    return env.historyPoints;
   }
 
   double? _change(List<ChartPoint> pts, double? Function(ChartPoint) pick) {
@@ -854,7 +850,7 @@ class _Hero extends StatelessWidget {
                         ),
                         Column(
                           children: [
-                            WeatherGlyph(code: out?.weatherCode ?? 1, size: 100),
+                            WeatherGlyph(code: out?.weatherCode ?? 1, isDay: out?.isDay ?? (DateTime.now().hour >= 6 && DateTime.now().hour < 19), size: 100),
                             const SizedBox(height: 3),
                             Builder(
                               builder: (_) {

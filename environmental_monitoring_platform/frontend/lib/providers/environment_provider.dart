@@ -288,10 +288,9 @@ class EnvironmentProvider with ChangeNotifier {
         date: isSelectedDateToday ? null : dateStr,
       );
       if (points.isNotEmpty) {
-        await LocalStorageService.ingestServerHistory(points);
-        final updatedLocal = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
-        _historyPoints = updatedLocal.isNotEmpty ? updatedLocal : points;
+        _historyPoints = points;
         notifyListeners();
+        LocalStorageService.ingestServerHistory(points);
       }
     } catch (e) {
       print('[EnvironmentProvider] fetchHistoryForSelectedDate error: $e');
@@ -348,36 +347,20 @@ class EnvironmentProvider with ChangeNotifier {
         );
       }
 
-      if (!isSelectedDateToday) {
-        final localPoints = await LocalStorageService.getLocalHistory(targetDate: _selectedDate);
-        _historyPoints = localPoints.isNotEmpty ? localPoints : serverPoints;
-      } else {
-        // Real-time live chart update for Today:
-        // Merge existing points, cloud server points, and newest live reading seamlessly
-        final now = DateTime.now();
-        final Map<int, ChartPoint> pointMap = {};
-        for (final p in _historyPoints) {
-          if (p.timestamp.difference(now).inMinutes < 5) {
-            pointMap[p.timestamp.millisecondsSinceEpoch ~/ 3000] = p;
+      if (serverPoints.isNotEmpty) {
+        if (_indoorReading != null) {
+          final last = serverPoints.last;
+          if (_indoorReading!.timestamp.difference(last.timestamp).inSeconds.abs() > 3) {
+            serverPoints.add(ChartPoint(
+              timestamp: _indoorReading!.timestamp,
+              indoorTemperature: _indoorReading!.temperature,
+              indoorHumidity: _indoorReading!.humidity,
+              outdoorTemperature: _outdoorReading?.temperature,
+              outdoorHumidity: _outdoorReading?.humidity,
+            ));
           }
         }
-        for (final p in serverPoints) {
-          if (p.timestamp.difference(now).inMinutes < 5) {
-            pointMap[p.timestamp.millisecondsSinceEpoch ~/ 3000] = p;
-          }
-        }
-        if (_indoorReading != null && _indoorReading!.timestamp.difference(now).inMinutes < 5) {
-          pointMap[_indoorReading!.timestamp.millisecondsSinceEpoch ~/ 3000] = ChartPoint(
-            timestamp: _indoorReading!.timestamp,
-            indoorTemperature: _indoorReading!.temperature,
-            indoorHumidity: _indoorReading!.humidity,
-            outdoorTemperature: _outdoorReading?.temperature,
-            outdoorHumidity: _outdoorReading?.humidity,
-          );
-        }
-        final sorted = pointMap.values.toList()..sort((a, b) => a.timestamp.compareTo(b.timestamp));
-        // Keep up to 60 rolling points for responsive, clean graphing
-        _historyPoints = sorted.length > 60 ? sorted.sublist(sorted.length - 60) : sorted;
+        _historyPoints = serverPoints;
       }
 
       _localRecordCount = await LocalStorageService.getLocalRecordCount();

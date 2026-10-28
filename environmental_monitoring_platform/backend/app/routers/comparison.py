@@ -65,8 +65,10 @@ def get_comparison():
         comfort = "Acceptable Indoor Conditions"
 
     # Status Summary
-    if temp_diff < -2.0:
-        summary = f"Indoor environment is {abs(temp_diff):.1f}°C cooler than outside."
+    if temp_diff > 1.5 and indoor_obj.temperature >= 26.5:
+        summary = f"Indoor environment is {temp_diff:.1f}°C warmer than outdoors. Cross-ventilation recommended for thermal cooling."
+    elif temp_diff < -2.0:
+        summary = f"Indoor environment is {abs(temp_diff):.1f}°C cooler than outside. Keep windows closed to retain cool air."
     elif temp_diff > 2.0:
         summary = f"Indoor environment is {temp_diff:.1f}°C warmer than outside."
     else:

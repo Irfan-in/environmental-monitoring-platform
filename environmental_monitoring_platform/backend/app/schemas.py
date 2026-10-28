@@ -53,6 +53,7 @@ class OutdoorReadingResponse(BaseModel):
     weather_code: int
     weather_desc: str
     timestamp: str
+    is_day: bool = True
     is_cached: bool = False
     cached_at: Optional[str] = None
 

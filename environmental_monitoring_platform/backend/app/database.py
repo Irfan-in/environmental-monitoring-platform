@@ -47,10 +47,16 @@ def init_db():
                 wind_speed REAL NOT NULL,
                 weather_code INTEGER NOT NULL,
                 weather_desc TEXT NOT NULL,
+                is_day INTEGER DEFAULT 1,
                 timestamp TEXT NOT NULL
             );
         """)
         conn.execute("CREATE INDEX IF NOT EXISTS idx_outdoor_ts ON outdoor_readings(timestamp);")
+
+        try:
+            conn.execute("ALTER TABLE outdoor_readings ADD COLUMN is_day INTEGER DEFAULT 1;")
+        except sqlite3.OperationalError:
+            pass
 
         conn.execute("""
             CREATE TABLE IF NOT EXISTS outdoor_forecast_cache (

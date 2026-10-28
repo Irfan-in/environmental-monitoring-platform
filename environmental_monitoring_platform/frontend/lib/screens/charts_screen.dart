@@ -23,12 +23,10 @@ class _ChartsScreenState extends State<ChartsScreen> {
     final env = context.watch<EnvironmentProvider>();
     final wx = Wx.of(context);
 
-    final now = DateTime.now();
-    List<ChartPoint> displayPoints = env.historyPoints
-        .where((p) => p.timestamp.difference(now).inMinutes < 5)
-        .toList();
+    List<ChartPoint> displayPoints = env.historyPoints;
     if (_liveWindowOnly && displayPoints.isNotEmpty) {
-      final cutoff = now.subtract(const Duration(minutes: 30));
+      final now = DateTime.now();
+      final cutoff = now.subtract(const Duration(hours: 2));
       final recent =
           displayPoints.where((p) => p.timestamp.isAfter(cutoff)).toList();
       if (recent.length >= 2) {
@@ -496,18 +494,37 @@ class _ChartsScreenState extends State<ChartsScreen> {
           _showTemperature ? p.indoorTemperature : p.indoorHumidity;
       final valOut =
           _showTemperature ? p.outdoorTemperature : p.outdoorHumidity;
+      final t = p.timestamp.toLocal();
+      final x = t.hour + (t.minute / 60.0) + (t.second / 3600.0);
 
       if (valIn != null) {
-        indoorSpots.add(FlSpot(i.toDouble(), valIn));
+        indoorSpots.add(FlSpot(x, valIn));
         minY = min(minY, valIn);
         maxY = max(maxY, valIn);
       }
       if (valOut != null) {
-        outdoorSpots.add(FlSpot(i.toDouble(), valOut));
+        outdoorSpots.add(FlSpot(x, valOut));
         minY = min(minY, valOut);
         maxY = max(maxY, valOut);
       }
     }
+
+    List<FlSpot> cleanSpots(List<FlSpot> spots) {
+      if (spots.isEmpty) return [];
+      spots.sort((a, b) => a.x.compareTo(b.x));
+      final List<FlSpot> cleaned = [];
+      for (final s in spots) {
+        if (cleaned.isEmpty || (s.x - cleaned.last.x).abs() > 0.05) {
+          cleaned.add(s);
+        } else {
+          cleaned[cleaned.length - 1] = s;
+        }
+      }
+      return cleaned;
+    }
+
+    final finalIndoor = cleanSpots(indoorSpots);
+    final finalOutdoor = cleanSpots(outdoorSpots);
 
     if (minY == double.infinity) minY = 0;
     if (maxY == -double.infinity) maxY = 50;
@@ -521,6 +538,8 @@ class _ChartsScreenState extends State<ChartsScreen> {
     final yInterval = ((maxY - minY) / 3).clamp(0.5, 20.0);
 
     return LineChartData(
+      minX: 0.0,
+      maxX: 24.0,
       minY: minY,
       maxY: maxY,
       lineTouchData: LineTouchData(
@@ -531,8 +550,13 @@ class _ChartsScreenState extends State<ChartsScreen> {
           getTooltipItems: (touchedSpots) {
             return touchedSpots.map((spot) {
               final isIndoor = spot.barIndex == 0;
+              final clamped = spot.x.clamp(0.0, 24.0);
+              final totalMin = (clamped * 60).round();
+              final h = (totalMin ~/ 60) % 24;
+              final m = totalMin % 60;
+              final timeStr = '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
               return LineTooltipItem(
-                '${isIndoor ? "Indoor" : "Outdoor"}: ${spot.y.toStringAsFixed(1)}$unit',
+                '${isIndoor ? "Indoor" : "Outdoor"} ($timeStr): ${spot.y.toStringAsFixed(1)}$unit',
                 TextStyle(
                   color: isIndoor ? wx.accent : wx.outdoorLine,
                   fontWeight: FontWeight.bold,
@@ -571,15 +595,15 @@ class _ChartsScreenState extends State<ChartsScreen> {
           sideTitles: SideTitles(
             showTitles: true,
             reservedSize: 24,
-            interval: max(1.0, (dynamicPoints.length / 4).floorToDouble()),
+            interval: 4.0,
             getTitlesWidget: (val, _) {
-              final idx = val.toInt();
-              if (idx >= 0 && idx < dynamicPoints.length) {
+              final h = val.toInt();
+              if (h % 4 == 0 && h >= 0 && h <= 24) {
+                final label = '${h.toString().padLeft(2, '0')}:00';
                 return Padding(
                   padding: const EdgeInsets.only(top: 6),
                   child: Text(
-                    DateFormat('HH:mm')
-                        .format(dynamicPoints[idx].timestamp.toLocal()),
+                    label,
                     style: wx.t(10, w: FontWeight.w600, c: wx.textDim),
                   ),
                 );
@@ -592,9 +616,10 @@ class _ChartsScreenState extends State<ChartsScreen> {
       borderData: FlBorderData(show: false),
       lineBarsData: [
         LineChartBarData(
-          spots: indoorSpots,
+          spots: finalIndoor,
           isCurved: true,
           curveSmoothness: 0.35,
+          preventCurveOverShooting: true,
           color: wx.accent,
           barWidth: 3,
           isStrokeCapRound: true,
@@ -612,9 +637,10 @@ class _ChartsScreenState extends State<ChartsScreen> {
           ),
         ),
         LineChartBarData(
-          spots: outdoorSpots,
+          spots: finalOutdoor,
           isCurved: true,
           curveSmoothness: 0.35,
+          preventCurveOverShooting: true,
           color: wx.outdoorLine,
           barWidth: 2.2,
           isStrokeCapRound: true,

@@ -282,27 +282,83 @@ class ComparisonScreen extends StatelessWidget {
                         ],
                       ),
                       const SizedBox(height: 14),
-                      _buildInsightRow(
-                        wx: wx,
-                        icon: Icons.air,
-                        title: 'Ventilation',
-                        text: outdoor.temperature < indoor.temperature
-                            ? 'Outside air is cooler than indoors. Opening windows provides natural cooling.'
-                            : 'Outside temperature is warmer than indoors. Keep windows closed to retain cool air.',
-                      ),
-                      Divider(
-                        color: wx.textDim.withValues(alpha: 0.15),
-                        height: 22,
-                      ),
-                      _buildInsightRow(
-                        wx: wx,
-                        icon: Icons.water_drop_outlined,
-                        title: 'Humidity',
-                        text: indoor.humidity > 65
-                            ? 'Indoor humidity is high (>65%). Ventilation or dehumidification recommended.'
-                            : indoor.humidity < 35
-                                ? 'Indoor air is dry (<35%). A humidifier could improve comfort.'
-                                : 'Indoor humidity is in the optimal comfort range.',
+                      Builder(
+                        builder: (_) {
+                          final inT = indoor.temperature;
+                          final outT = outdoor.temperature;
+                          final inH = indoor.humidity;
+                          final outH = outdoor.humidity;
+
+                          final tempDiff = inT - outT;
+                          final isIndoorWarm = inT >= 26.5;
+                          final isOutdoorCooler = tempDiff >= 1.0;
+                          final isOutdoorHumid = outH >= 75.0;
+
+                          String ventText;
+                          String humText;
+
+                          if (isIndoorWarm && isOutdoorCooler) {
+                            ventText =
+                                'Outdoor air is cooler (${outT.toStringAsFixed(1)}°C vs ${inT.toStringAsFixed(1)}°C). Open windows for natural cooling and heat relief.';
+                            if (isOutdoorHumid) {
+                              humText =
+                                  'High outdoor humidity (${outH.toStringAsFixed(0)}%), but cooler airflow takes priority for heat relief. Keep fans running to promote air circulation.';
+                            } else {
+                              humText = inH > 65
+                                  ? 'Cross-ventilation will also help lower indoor moisture levels.'
+                                  : 'Comfortable outdoor conditions will maintain pleasant indoor humidity.';
+                            }
+                          } else if (outT > inT + 1.0) {
+                            ventText =
+                                'Outdoor air is warmer (${outT.toStringAsFixed(1)}°C). Keep windows and blinds closed to trap cool indoor air.';
+                            if (inH > 65) {
+                              humText =
+                                  'Indoor humidity is elevated (${inH.toStringAsFixed(0)}%). Consider running an air conditioner in dry mode or a dehumidifier.';
+                            } else if (inH < 35) {
+                              humText =
+                                  'Indoor air is dry (${inH.toStringAsFixed(0)}%). A humidifier can improve breathing comfort.';
+                            } else {
+                              humText =
+                                  'Indoor humidity (${inH.toStringAsFixed(0)}%) is within the healthy 40–60% zone.';
+                            }
+                          } else {
+                            ventText =
+                                'Indoor and outdoor temperatures are balanced (${inT.toStringAsFixed(1)}°C). Open windows for fresh air exchange.';
+                            if (inH > 65) {
+                              humText = outH < inH
+                                  ? 'Outdoor air is drier; ventilating will help lower indoor moisture.'
+                                  : 'Humid conditions. Use ceiling fans to maintain air circulation.';
+                            } else if (inH < 35) {
+                              humText =
+                                  'Indoor air is dry (${inH.toStringAsFixed(0)}%). Humidification recommended.';
+                            } else {
+                              humText =
+                                  'Indoor humidity is in the optimal comfort range (40–60%).';
+                            }
+                          }
+
+                          return Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              _buildInsightRow(
+                                wx: wx,
+                                icon: Icons.air,
+                                title: 'Ventilation',
+                                text: ventText,
+                              ),
+                              Divider(
+                                color: wx.textDim.withValues(alpha: 0.15),
+                                height: 22,
+                              ),
+                              _buildInsightRow(
+                                wx: wx,
+                                icon: Icons.water_drop_outlined,
+                                title: 'Humidity & Comfort',
+                                text: humText,
+                              ),
+                            ],
+                          );
+                        },
                       ),
                     ],
                   ),

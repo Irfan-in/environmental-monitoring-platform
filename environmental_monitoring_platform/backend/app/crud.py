@@ -48,6 +48,7 @@ def insert_outdoor_reading(
     wind_speed: float,
     weather_code: int,
     weather_desc: str,
+    is_day: bool = True,
     timestamp: Optional[str] = None
 ) -> int:
     conn = get_connection()
@@ -57,10 +58,10 @@ def insert_outdoor_reading(
         cur = conn.execute("""
             INSERT INTO outdoor_readings (
                 city, latitude, longitude, temperature, humidity,
-                wind_speed, weather_code, weather_desc, timestamp
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                wind_speed, weather_code, weather_desc, is_day, timestamp
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (city, latitude, longitude, round(temperature, 1), round(humidity, 1),
-              round(wind_speed, 1), weather_code, weather_desc, timestamp))
+              round(wind_speed, 1), weather_code, weather_desc, 1 if is_day else 0, timestamp))
         return cur.lastrowid
 
 
@@ -74,6 +75,14 @@ def get_latest_outdoor_reading() -> Optional[Dict[str, Any]]:
         return None
     data = dict(row)
     data["is_cached"] = "(Cached)" in data.get("weather_desc", "")
+    if "is_day" in data and data["is_day"] is not None:
+        data["is_day"] = bool(data["is_day"])
+    else:
+        try:
+            ts = datetime.fromisoformat(data["timestamp"].replace("Z", "+00:00"))
+            data["is_day"] = 6 <= ts.hour < 19
+        except Exception:
+            data["is_day"] = True
     cur_c = conn.execute("SELECT cached_at FROM outdoor_forecast_cache ORDER BY id DESC LIMIT 1")
     row_c = cur_c.fetchone()
     data["cached_at"] = row_c["cached_at"] if row_c else data.get("timestamp")
@@ -155,114 +164,121 @@ def update_threshold(parameter: str, min_val: float, max_val: float, is_enabled:
 # ==========================================
 # Historical Combined Query
 # ==========================================
-def get_combined_history(limit: int = 50, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_combined_history(limit: int = 500, target_date: Optional[str] = None) -> List[Dict[str, Any]]:
     """
-    Retrieve aligned historical data points for indoor and outdoor conditions.
+    Retrieve aligned historical data points for indoor and outdoor conditions across 24 hours.
     Supports filtering by target_date (YYYY-MM-DD) for historical calendar browsing.
     """
     import math
     conn = get_connection()
 
-    if target_date:
-        cur = conn.execute("""
-            SELECT timestamp, temperature, humidity FROM indoor_readings
-            WHERE timestamp LIKE ?
-            ORDER BY id ASC LIMIT ?
-        """, (f"{target_date}%", limit))
-        indoor_rows = list(cur.fetchall())
+    if not target_date:
+        target_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
-        cur_out = conn.execute("""
-            SELECT timestamp, temperature, humidity FROM outdoor_readings
-            WHERE timestamp LIKE ?
-            ORDER BY id ASC LIMIT ?
-        """, (f"{target_date}%", limit * 2))
-        outdoor_rows = list(cur_out.fetchall())
+    cur = conn.execute("""
+        SELECT timestamp, temperature, humidity FROM indoor_readings
+        WHERE timestamp LIKE ?
+        ORDER BY id ASC LIMIT ?
+    """, (f"{target_date}%", limit))
+    indoor_rows = list(cur.fetchall())
 
-        # If zero readings recorded on this past date, provide smooth diurnal model for the calendar day
-        if not indoor_rows and not outdoor_rows:
-            points = []
-            for h in range(0, 24, 1):
-                h_str = f"{h:02d}:00"
-                ts = f"{target_date}T{h_str}:00Z"
-                # Natural diurnal solar temperature cycle
-                out_t = round(23.5 + 6.5 * math.sin((h - 8) * math.pi / 12.0), 1)
-                in_t = round(24.8 + 3.2 * math.sin((h - 10) * math.pi / 12.0), 1)
-                in_h = round(56.0 - 8.0 * math.sin((h - 10) * math.pi / 12.0), 1)
-                out_h = round(72.0 - 18.0 * math.sin((h - 8) * math.pi / 12.0), 1)
-                points.append({
-                    "timestamp": ts,
-                    "indoor_temperature": in_t,
-                    "indoor_humidity": in_h,
-                    "outdoor_temperature": out_t,
-                    "outdoor_humidity": out_h
-                })
-            return points
-    else:
-        # Fetch recent indoor readings
-        cur = conn.execute("""
-            SELECT timestamp, temperature, humidity FROM indoor_readings
-            ORDER BY id DESC LIMIT ?
-        """, (limit,))
-        indoor_rows = list(reversed(cur.fetchall()))
+    cur_out = conn.execute("""
+        SELECT timestamp, temperature, humidity FROM outdoor_readings
+        WHERE timestamp LIKE ?
+        ORDER BY id ASC LIMIT ?
+    """, (f"{target_date}%", limit * 2))
+    outdoor_rows = list(cur_out.fetchall())
 
-        # Fetch recent outdoor readings
-        cur_out = conn.execute("""
-            SELECT timestamp, temperature, humidity FROM outdoor_readings
-            ORDER BY id DESC LIMIT ?
-        """, (limit * 2,))
-        outdoor_rows = list(reversed(cur_out.fetchall()))
-
-    # Fetch 24h cached forecast as fallback for outdoor diurnal curve
+    # Fetch 24h cached forecast for outdoor diurnal curve
     cur_f = conn.execute("""
         SELECT hour_timestamp as timestamp, temperature, humidity FROM outdoor_forecast_cache
-        ORDER BY hour_timestamp ASC LIMIT 24
+        ORDER BY hour_timestamp ASC LIMIT 48
     """)
-    forecast_rows = cur_f.fetchall()
+    forecast_rows = list(cur_f.fetchall())
 
-    points = []
-    if indoor_rows:
-        for r in indoor_rows:
-            in_ts = r["timestamp"]
-            # Find closest outdoor reading by timestamp prefix (YYYY-MM-DDTHH)
-            matched_out = None
-            in_hour = in_ts[:13] if len(in_ts) >= 13 else in_ts
-            for o in outdoor_rows:
-                if o["timestamp"].startswith(in_hour):
-                    matched_out = o
-                    break
-            if not matched_out and forecast_rows:
-                for f in forecast_rows:
-                    if f["timestamp"].startswith(in_hour):
-                        matched_out = f
-                        break
-            if not matched_out and outdoor_rows:
-                matched_out = outdoor_rows[-1]
+    # If zero readings recorded on this past date, provide smooth diurnal model for the calendar day
+    if not indoor_rows and not outdoor_rows:
+        points = []
+        for h in range(0, 24, 1):
+            h_str = f"{h:02d}:00"
+            ts = f"{target_date}T{h_str}:00Z"
+            # Natural diurnal solar temperature cycle
+            out_t = round(23.5 + 6.5 * math.sin((h - 8) * math.pi / 12.0), 1)
+            in_t = round(24.8 + 3.2 * math.sin((h - 10) * math.pi / 12.0), 1)
+            in_h = round(56.0 - 8.0 * math.sin((h - 10) * math.pi / 12.0), 1)
+            out_h = round(72.0 - 18.0 * math.sin((h - 8) * math.pi / 12.0), 1)
+            points.append({
+                "timestamp": ts,
+                "indoor_temperature": in_t,
+                "indoor_humidity": in_h,
+                "outdoor_temperature": out_t,
+                "outdoor_humidity": out_h
+            })
+        return points
 
-            points.append({
-                "timestamp": in_ts,
-                "indoor_temperature": r["temperature"],
-                "indoor_humidity": r["humidity"],
-                "outdoor_temperature": matched_out["temperature"] if matched_out else None,
-                "outdoor_humidity": matched_out["humidity"] if matched_out else None
-            })
-    elif outdoor_rows:
-        for r in outdoor_rows:
-            points.append({
-                "timestamp": r["timestamp"],
-                "indoor_temperature": None,
-                "indoor_humidity": None,
-                "outdoor_temperature": r["temperature"],
-                "outdoor_humidity": r["humidity"]
-            })
-    elif forecast_rows:
-        for f in forecast_rows:
-            points.append({
-                "timestamp": f["timestamp"],
+    # Build 24-hour timeline
+    points_dict = {}
+
+    # 1. Seed outdoor baseline across 24h using hourly forecast if available
+    for f in forecast_rows:
+        f_ts = f["timestamp"]
+        # Format can be YYYY-MM-DDTHH:00 or ISO
+        if target_date in f_ts or len(f_ts) >= 16:
+            # Map into target_date format
+            h_part = f_ts[11:16] if len(f_ts) >= 16 else "12:00"
+            norm_ts = f"{target_date}T{h_part}:00Z"
+            points_dict[norm_ts] = {
+                "timestamp": norm_ts,
                 "indoor_temperature": None,
                 "indoor_humidity": None,
                 "outdoor_temperature": f["temperature"],
                 "outdoor_humidity": f["humidity"]
-            })
+            }
+
+    # 2. Add outdoor readings
+    for o in outdoor_rows:
+        o_ts = o["timestamp"]
+        if o_ts not in points_dict:
+            points_dict[o_ts] = {
+                "timestamp": o_ts,
+                "indoor_temperature": None,
+                "indoor_humidity": None,
+                "outdoor_temperature": o["temperature"],
+                "outdoor_humidity": o["humidity"]
+            }
+        else:
+            points_dict[o_ts]["outdoor_temperature"] = o["temperature"]
+            points_dict[o_ts]["outdoor_humidity"] = o["humidity"]
+
+    # 3. Add indoor readings and pair with closest outdoor reading
+    for r in indoor_rows:
+        in_ts = r["timestamp"]
+        in_hour = in_ts[:13] if len(in_ts) >= 13 else in_ts
+
+        # Find closest outdoor reading
+        matched_out = None
+        for o in outdoor_rows:
+            if o["timestamp"].startswith(in_hour):
+                matched_out = o
+                break
+        if not matched_out and forecast_rows:
+            for f in forecast_rows:
+                if f["timestamp"].startswith(in_hour):
+                    matched_out = f
+                    break
+        if not matched_out and outdoor_rows:
+            matched_out = outdoor_rows[-1]
+
+        points_dict[in_ts] = {
+            "timestamp": in_ts,
+            "indoor_temperature": r["temperature"],
+            "indoor_humidity": r["humidity"],
+            "outdoor_temperature": matched_out["temperature"] if matched_out else None,
+            "outdoor_humidity": matched_out["humidity"] if matched_out else None
+        }
+
+    points = list(points_dict.values())
+    points.sort(key=lambda p: p["timestamp"])
     return points
 
 

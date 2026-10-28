@@ -2,7 +2,6 @@ import 'dart:math' as math;
 
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
 
 import 'package:environmental_monitoring_platform/models/chart_point.dart';
 import 'dart:ui';
@@ -634,23 +633,30 @@ Future<T?> showWxSheet<T>(BuildContext context,
 //  Illustrations
 // ─────────────────────────────────────────────────────────────────────────────
 
-/// Sun / cloud / rain glyph keyed by Open-Meteo (WMO) weather code.
+/// Sun / moon / cloud / rain glyph keyed by Open-Meteo (WMO) weather code and day/night.
 class WeatherGlyph extends StatelessWidget {
-  const WeatherGlyph({super.key, required this.code, this.size = 96});
+  const WeatherGlyph({
+    super.key,
+    required this.code,
+    this.isDay = true,
+    this.size = 96,
+  });
   final int code;
+  final bool isDay;
   final double size;
 
   @override
   Widget build(BuildContext context) => SizedBox(
         width: size,
         height: size,
-        child: CustomPaint(painter: _GlyphPainter(code)),
+        child: CustomPaint(painter: _GlyphPainter(code, isDay)),
       );
 }
 
 class _GlyphPainter extends CustomPainter {
-  _GlyphPainter(this.code);
+  _GlyphPainter(this.code, this.isDay);
   final int code;
+  final bool isDay;
 
   @override
   void paint(Canvas canvas, Size s) {
@@ -661,18 +667,35 @@ class _GlyphPainter extends CustomPainter {
         (code >= 80 && code <= 82) ||
         code >= 95;
     final snowy = (code >= 71 && code <= 77) || code == 85 || code == 86;
+    final thunderstorm = code >= 95;
 
+    // Celestial body: Sun (Day) or Crescent Moon (Night)
     if (clear || partly) {
-      final c = Offset(w * (clear ? 0.5 : 0.62), w * (clear ? 0.5 : 0.38));
-      final r = w * (clear ? 0.30 : 0.27);
-      canvas.drawCircle(
-        c,
-        r,
-        Paint()
-          ..shader = const RadialGradient(
-            colors: [Color(0xFFFFE066), Color(0xFFFFB800)],
-          ).createShader(Rect.fromCircle(center: c, radius: r)),
-      );
+      if (isDay) {
+        // Sun
+        final c = Offset(w * (clear ? 0.5 : 0.62), w * (clear ? 0.5 : 0.38));
+        final r = w * (clear ? 0.30 : 0.27);
+        canvas.drawCircle(
+          c,
+          r,
+          Paint()
+            ..shader = const RadialGradient(
+              colors: [Color(0xFFFFE066), Color(0xFFFFB800)],
+            ).createShader(Rect.fromCircle(center: c, radius: r)),
+        );
+      } else {
+        // Crescent Moon
+        final c = Offset(w * (clear ? 0.5 : 0.62), w * (clear ? 0.5 : 0.38));
+        final r = w * (clear ? 0.32 : 0.28);
+        _drawMoon(canvas, c, r);
+
+        if (clear) {
+          // Twinkling stars
+          _drawStar(canvas, Offset(w * 0.22, w * 0.32), w * 0.04);
+          _drawStar(canvas, Offset(w * 0.30, w * 0.68), w * 0.03);
+          _drawStar(canvas, Offset(w * 0.78, w * 0.72), w * 0.035);
+        }
+      }
     }
 
     const front = Color(0xFFEDEAF3);
@@ -693,12 +716,61 @@ class _GlyphPainter extends CustomPainter {
       for (final x in [0.36, 0.52, 0.68]) {
         canvas.drawLine(Offset(w * x, w * 0.80), Offset(w * (x - 0.04), w * 0.93), p);
       }
+
+      if (thunderstorm) {
+        // Lightning bolt
+        final bolt = Path()
+          ..moveTo(w * 0.52, w * 0.66)
+          ..lineTo(w * 0.44, w * 0.79)
+          ..lineTo(w * 0.51, w * 0.79)
+          ..lineTo(w * 0.46, w * 0.94)
+          ..lineTo(w * 0.58, w * 0.77)
+          ..lineTo(w * 0.51, w * 0.77)
+          ..close();
+        canvas.drawPath(
+          bolt,
+          Paint()
+            ..color = const Color(0xFFFFD54F)
+            ..style = PaintingStyle.fill,
+        );
+      }
     } else if (snowy) {
       final p = Paint()..color = Colors.white;
       for (final x in [0.36, 0.52, 0.68]) {
         canvas.drawCircle(Offset(w * x, w * 0.87), w * 0.03, p);
       }
     }
+  }
+
+  void _drawMoon(Canvas c, Offset center, double r) {
+    final moonPaint = Paint()
+      ..shader = const LinearGradient(
+        colors: [Color(0xFFFFF7C2), Color(0xFFFFD84D)],
+        begin: Alignment.topLeft,
+        end: Alignment.bottomRight,
+      ).createShader(Rect.fromCircle(center: center, radius: r));
+
+    final fullCircle = Path()
+      ..addOval(Rect.fromCircle(center: center, radius: r));
+    final cutCircle = Path()
+      ..addOval(Rect.fromCircle(
+        center: Offset(center.dx + r * 0.42, center.dy - r * 0.28),
+        radius: r * 0.88,
+      ));
+
+    final crescent = Path.combine(PathOperation.difference, fullCircle, cutCircle);
+    c.drawPath(crescent, moonPaint);
+  }
+
+  void _drawStar(Canvas c, Offset pos, double size) {
+    final starPaint = Paint()..color = const Color(0xFFFFFDE7);
+    final p = Path()
+      ..moveTo(pos.dx, pos.dy - size)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx + size, pos.dy)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy + size)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx - size, pos.dy)
+      ..quadraticBezierTo(pos.dx, pos.dy, pos.dx, pos.dy - size);
+    c.drawPath(p, starPaint);
   }
 
   void _cloud(Canvas c, double w, Offset o, double k, Color col) {
@@ -717,7 +789,8 @@ class _GlyphPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _GlyphPainter old) => old.code != code;
+  bool shouldRepaint(covariant _GlyphPainter old) =>
+      old.code != code || old.isDay != isDay;
 }
 
 /// Soft stars and warm lanterns behind the hero card text.
@@ -871,17 +944,36 @@ class WxTrendChart extends StatelessWidget {
       final p = points[i];
       final double? a = temperature ? p.indoorTemperature : p.indoorHumidity;
       final double? b = temperature ? p.outdoorTemperature : p.outdoorHumidity;
+      final t = p.timestamp.toLocal();
+      final x = t.hour + (t.minute / 60.0) + (t.second / 3600.0);
       if (showIndoor && a != null) {
-        inSpots.add(FlSpot(i.toDouble(), a));
+        inSpots.add(FlSpot(x, a));
         lo = math.min(lo, a);
         hi = math.max(hi, a);
       }
       if (showOutdoor && b != null) {
-        outSpots.add(FlSpot(i.toDouble(), b));
+        outSpots.add(FlSpot(x, b));
         lo = math.min(lo, b);
         hi = math.max(hi, b);
       }
     }
+
+    List<FlSpot> cleanSpots(List<FlSpot> spots) {
+      if (spots.isEmpty) return [];
+      spots.sort((a, b) => a.x.compareTo(b.x));
+      final List<FlSpot> cleaned = [];
+      for (final s in spots) {
+        if (cleaned.isEmpty || (s.x - cleaned.last.x).abs() > 0.05) {
+          cleaned.add(s);
+        } else {
+          cleaned[cleaned.length - 1] = s;
+        }
+      }
+      return cleaned;
+    }
+
+    final cleanInSpots = cleanSpots(inSpots);
+    final cleanOutSpots = cleanSpots(outSpots);
 
     if (inSpots.isEmpty && outSpots.isEmpty) {
       return SizedBox(
@@ -926,17 +1018,21 @@ class WxTrendChart extends StatelessWidget {
     final bars = <LineChartBarData>[];
     final colors = <Color>[];
     if (inSpots.isNotEmpty) {
-      bars.add(make(inSpots, wx.accent, marker: true));
+      bars.add(make(cleanInSpots, wx.accent, marker: true));
       colors.add(wx.accent);
     }
     if (outSpots.isNotEmpty) {
-      bars.add(make(outSpots, wx.outdoorLine, marker: inSpots.isEmpty));
+      bars.add(make(cleanOutSpots, wx.outdoorLine, marker: cleanInSpots.isEmpty));
       colors.add(wx.outdoorLine);
     }
 
-    String timeAt(int i) => (i >= 0 && i < points.length)
-        ? DateFormat('HH:mm').format(points[i].timestamp.toLocal())
-        : '';
+    String timeAtHour(double x) {
+      final clamped = x.clamp(0.0, 24.0);
+      final totalMin = (clamped * 60).round();
+      final h = (totalMin ~/ 60) % 24;
+      final m = totalMin % 60;
+      return '${h.toString().padLeft(2, '0')}:${m.toString().padLeft(2, '0')}';
+    }
 
     final axis = wx.t(11, c: wx.textDim);
 
@@ -944,8 +1040,8 @@ class WxTrendChart extends StatelessWidget {
       height: height,
       child: LineChart(
         LineChartData(
-          minX: 0,
-          maxX: math.max(1, points.length - 1).toDouble(),
+          minX: 0.0,
+          maxX: 24.0,
           minY: minY,
           maxY: maxY,
           borderData: FlBorderData(show: false),
@@ -974,9 +1070,14 @@ class WxTrendChart extends StatelessWidget {
               sideTitles: SideTitles(
                 showTitles: true,
                 reservedSize: 24,
-                interval: math.max(1, (points.length / 3).floor()).toDouble(),
-                getTitlesWidget: (v, meta) =>
-                    Text(timeAt(v.toInt()), style: axis),
+                interval: 6.0,
+                getTitlesWidget: (v, meta) {
+                  final h = v.toInt();
+                  if (h == 0 || h == 6 || h == 12 || h == 18 || h == 24) {
+                    return Text('${h.toString().padLeft(2, '0')}:00', style: axis);
+                  }
+                  return const SizedBox();
+                },
               ),
             ),
           ),
@@ -1010,7 +1111,7 @@ class WxTrendChart extends StatelessWidget {
                     children: k == 0
                         ? [
                             TextSpan(
-                              text: '  ${timeAt(spots[k].x.toInt())}',
+                              text: '  ${timeAtHour(spots[k].x)}',
                               style: wx.t(11, c: wx.textDim),
                             ),
                           ]

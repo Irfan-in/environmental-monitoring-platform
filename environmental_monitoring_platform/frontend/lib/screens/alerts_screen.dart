@@ -6,28 +6,18 @@ import 'package:environmental_monitoring_platform/providers/environment_provider
 import 'package:environmental_monitoring_platform/services/api_service.dart';
 import 'package:environmental_monitoring_platform/theme/wx_style.dart';
 
-class AlertsScreen extends StatefulWidget {
+class AlertsScreen extends StatelessWidget {
   const AlertsScreen({super.key});
-
-  @override
-  State<AlertsScreen> createState() => _AlertsScreenState();
-}
-
-class _AlertsScreenState extends State<AlertsScreen> {
-  int _filter = 0; // 0 = active, 1 = acknowledged, 2 = all
 
   @override
   Widget build(BuildContext context) {
     final env = context.watch<EnvironmentProvider>();
     final wx = Wx.of(context);
 
-    final all = env.alerts;
-    final activeCount = all.where((a) => !a.isAcknowledged).length;
-    final shown = all.where((a) {
-      if (_filter == 0) return !a.isAcknowledged;
-      if (_filter == 1) return a.isAcknowledged;
-      return true;
-    }).toList();
+    // Sort alerts by latest timestamp first and limit to the most recent 25 events
+    final sortedAlerts = List<AlertItem>.from(env.alerts)
+      ..sort((a, b) => b.timestamp.compareTo(a.timestamp));
+    final displayedAlerts = sortedAlerts.take(25).toList();
 
     return Scaffold(
       backgroundColor: wx.bg,
@@ -36,101 +26,128 @@ class _AlertsScreenState extends State<AlertsScreen> {
         child: ListView(
           padding: const EdgeInsets.fromLTRB(16, 8, 16, 110),
           children: [
+            // Top Bar
             Row(
-              children: [
-                Expanded(
-                  child: Text('Alerts', style: wx.t(24, w: FontWeight.w500)),
-                ),
-                IconButton(
-                  tooltip: 'Acknowledge all alerts',
-                  icon: Icon(Icons.done_all, color: wx.good),
-                  onPressed: () async {
-                    await env.acknowledgeAllAlerts();
-                    if (context.mounted) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('All alerts acknowledged')),
-                      );
-                    }
-                  },
-                ),
-                IconButton(
-                  tooltip: 'Set thresholds',
-                  icon: Icon(Icons.tune, color: wx.text),
-                  onPressed: () => _showThresholdDialog(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Big readout
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
               children: [
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text('$activeCount',
-                          style: wx.t(64, w: FontWeight.w300, h: 1.05)),
                       Text(
-                        activeCount == 0
-                            ? 'Everything is within limits'
-                            : (activeCount == 1 ? 'active alert' : 'active alerts'),
-                        style: wx.t(14, c: wx.textDim),
+                        'Information Board',
+                        style: wx.t(24, w: FontWeight.w500),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        'Environmental advisory & threshold log',
+                        style: wx.t(12, c: wx.textDim),
                       ),
                     ],
                   ),
                 ),
-                if (activeCount == 0)
-                  const WeatherGlyph(code: 0, size: 72)
-                else
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: wx.bad.withValues(alpha: 0.15),
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(Icons.warning_amber_rounded, size: 40, color: wx.bad),
-                  ),
+                IconButton(
+                  tooltip: 'Threshold settings',
+                  icon: Icon(Icons.tune_rounded, color: wx.text, size: 22),
+                  onPressed: () => _showThresholdDialog(context),
+                ),
               ],
             ),
             const SizedBox(height: 16),
 
-            WxChips(
-              labels: const ['Active', 'Acknowledged', 'All'],
-              index: _filter,
-              onChanged: (i) => setState(() => _filter = i),
+            // Overview Readout Card
+            WxCard(
+              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '${displayedAlerts.length}',
+                          style: wx.t(52, w: FontWeight.w300, h: 1.05),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          displayedAlerts.isEmpty
+                              ? 'All environmental metrics within limits'
+                              : (displayedAlerts.length == 1
+                                  ? 'Recent climate advisory logged'
+                                  : 'Recent climate advisories logged'),
+                          style: wx.t(13, c: wx.textDim),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: displayedAlerts.isEmpty
+                          ? wx.good.withValues(alpha: 0.15)
+                          : wx.warn.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(
+                      displayedAlerts.isEmpty
+                          ? Icons.verified_user_outlined
+                          : Icons.campaign_rounded,
+                      size: 28,
+                      color: displayedAlerts.isEmpty ? wx.good : wx.warn,
+                    ),
+                  ),
+                ],
+              ),
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: 18),
 
-            if (shown.isEmpty)
+            // List Title
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Text(
+                    'Recorded Advisories',
+                    style: wx.t(14, w: FontWeight.w600),
+                  ),
+                  if (displayedAlerts.isNotEmpty)
+                    Text(
+                      'Latest on top',
+                      style: wx.t(11, c: wx.textDim),
+                    ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 8),
+
+            if (displayedAlerts.isEmpty)
               WxCard(
-                padding: const EdgeInsets.symmetric(vertical: 32, horizontal: 16),
+                padding: const EdgeInsets.symmetric(vertical: 36, horizontal: 20),
                 child: Column(
                   children: [
-                    WxIconDot(icon: Icons.check_circle_outline, size: 56, color: wx.good),
-                    const SizedBox(height: 12),
+                    WxIconDot(
+                      icon: Icons.check_circle_outline,
+                      size: 52,
+                      color: wx.good,
+                    ),
+                    const SizedBox(height: 14),
                     Text(
-                      _filter == 1
-                          ? 'No acknowledged alerts'
-                          : 'All readings are normal',
+                      'Atmospheric Conditions Optimal',
                       style: wx.t(16, w: FontWeight.w500),
                     ),
-                    const SizedBox(height: 4),
+                    const SizedBox(height: 6),
                     Text(
-                      _filter == 1
-                          ? 'Alerts you acknowledge will show up here.'
-                          : 'No thresholds have been crossed.',
+                      'Both temperature and relative humidity have stayed within safe thresholds.',
                       textAlign: TextAlign.center,
-                      style: wx.t(13, c: wx.textDim),
+                      style: wx.t(12, c: wx.textDim, h: 1.4),
                     ),
                   ],
                 ),
               )
             else
-              for (final alert in shown) ...[
-                _alertCard(wx, env, alert),
+              for (final alert in displayedAlerts) ...[
+                _advisoryCard(wx, alert),
                 const SizedBox(height: 10),
               ],
           ],
@@ -149,77 +166,108 @@ class _AlertsScreenState extends State<AlertsScreen> {
 
   String _num(dynamic v) => v is num ? v.toStringAsFixed(1) : '$v';
 
-  Widget _alertCard(Wx wx, EnvironmentProvider env, AlertItem alert) {
-    final acked = alert.isAcknowledged;
-    final tone = acked ? wx.good : wx.bad;
+  String _relativeTime(DateTime t) {
+    final diff = DateTime.now().difference(t);
+    if (diff.inSeconds < 45) return 'Just now';
+    if (diff.inMinutes < 60) return '${diff.inMinutes}m ago';
+    if (diff.inHours < 24) return '${diff.inHours}h ago';
+    return DateFormat('dd MMM').format(t.toLocal());
+  }
+
+  Widget _advisoryCard(Wx wx, AlertItem alert) {
+    final isTemp = alert.parameter.toLowerCase().contains('temp');
+    final icon = isTemp
+        ? Icons.thermostat_rounded
+        : Icons.water_drop_outlined;
+    final badgeColor = isTemp ? wx.warn : wx.accent;
 
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 14, 8, 14),
+      padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
       decoration: BoxDecoration(
         color: wx.card,
-        borderRadius: BorderRadius.circular(24),
-        border: acked
-            ? null
-            : Border.all(color: wx.bad.withValues(alpha: 0.45), width: 1.2),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(
+          color: wx.cardBorder,
+          width: 1.0,
+        ),
       ),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
+          // Parameter Icon
+          Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: badgeColor.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: Icon(icon, color: badgeColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+
+          // Message & Details
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: tone.withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    _pretty(alert.alertType),
-                    style: wx.t(11, w: FontWeight.w600, c: tone),
-                  ),
+                Row(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: badgeColor.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        _pretty(alert.alertType),
+                        style: wx.t(10, w: FontWeight.w600, c: badgeColor),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _relativeTime(alert.timestamp),
+                      style: wx.t(11, c: wx.textDim),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 8),
-                Text(alert.message, style: wx.t(15, w: FontWeight.w500)),
-                const SizedBox(height: 4),
+                const SizedBox(height: 6),
                 Text(
-                  '${alert.source}  \u00B7  ${DateFormat('HH:mm:ss').format(alert.timestamp)}',
-                  style: wx.t(12, c: wx.textDim),
+                  alert.message,
+                  style: wx.t(14, w: FontWeight.w500),
+                ),
+                const SizedBox(height: 3),
+                Text(
+                  '${alert.source}  \u00B7  ${DateFormat('HH:mm:ss').format(alert.timestamp.toLocal())}',
+                  style: wx.t(11, c: wx.textDim),
                 ),
               ],
             ),
           ),
           const SizedBox(width: 12),
-          Container(
-            width: 1,
-            height: 48,
-            color: wx.textDim.withValues(alpha: 0.35),
-          ),
-          const SizedBox(width: 12),
+
+          // Metric Values
           Column(
             crossAxisAlignment: CrossAxisAlignment.end,
+            mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Text(_num(alert.triggeredValue),
-                  style: wx.t(18, w: FontWeight.w500, c: acked ? wx.text : wx.bad)),
+              Text(
+                '${_num(alert.triggeredValue)}${isTemp ? "°C" : "%"}',
+                style: wx.t(16, w: FontWeight.w700, c: badgeColor),
+              ),
               const SizedBox(height: 2),
-              Text('Limit ${_num(alert.thresholdValue)}',
-                  style: wx.t(11, c: wx.textDim)),
+              Text(
+                'Limit ${_num(alert.thresholdValue)}',
+                style: wx.t(10, c: wx.textDim),
+              ),
             ],
           ),
-          if (!acked)
-            IconButton(
-              tooltip: 'Acknowledge',
-              icon: Icon(Icons.done, color: wx.accent),
-              onPressed: () => env.acknowledgeAlert(alert.id),
-            )
-          else
-            const SizedBox(width: 8),
         ],
       ),
     );
   }
 
-  // ── threshold dialog (admin only, unchanged behaviour) ─────────────────────
+  // ── threshold dialog (admin only) ──────────────────────────────────────────
 
   void _showThresholdDialog(BuildContext context) {
     final env = Provider.of<EnvironmentProvider>(context, listen: false);
@@ -235,7 +283,7 @@ class _AlertsScreenState extends State<AlertsScreen> {
           title: Text('Admin access needed',
               style: wx.t(18, w: FontWeight.w500)),
           content: Text(
-            'Only administrators can change thresholds.\n\n'
+            'Only administrators can change threshold limits.\n\n'
             'Signed in as ${env.username} (${env.userRole.toUpperCase()}). '
             'Log in with the account icon on the dashboard.',
             style: wx.t(13, c: wx.textDim, h: 1.4),

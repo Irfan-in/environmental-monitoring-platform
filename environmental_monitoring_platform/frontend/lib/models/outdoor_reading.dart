@@ -10,6 +10,7 @@ class OutdoorReading {
   final double windSpeed;
   final int weatherCode;
   final String weatherDesc;
+  final bool isDay;
   final DateTime timestamp;
   final bool isCached;
   final DateTime? cachedAt;
@@ -24,12 +25,14 @@ class OutdoorReading {
     required this.windSpeed,
     required this.weatherCode,
     required this.weatherDesc,
+    this.isDay = true,
     required this.timestamp,
     this.isCached = false,
     this.cachedAt,
   });
 
   factory OutdoorReading.fromJson(Map<String, dynamic> json) {
+    final ts = ChartPoint.parseTimestamp(json['timestamp']);
     return OutdoorReading(
       id: json['id'] as int? ?? 0,
       city: json['city'] as String? ?? 'Outdoor Location',
@@ -40,7 +43,9 @@ class OutdoorReading {
       windSpeed: (json['wind_speed'] as num?)?.toDouble() ?? 0.0,
       weatherCode: json['weather_code'] as int? ?? 0,
       weatherDesc: json['weather_desc'] as String? ?? 'Fair',
-      timestamp: ChartPoint.parseTimestamp(json['timestamp']),
+      isDay: json['is_day'] as bool? ??
+          (ts.toLocal().hour >= 6 && ts.toLocal().hour < 19),
+      timestamp: ts,
       isCached: json['is_cached'] as bool? ?? false,
       cachedAt: json['cached_at'] != null
           ? ChartPoint.parseTimestamp(json['cached_at'])

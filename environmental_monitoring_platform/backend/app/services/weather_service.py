@@ -54,8 +54,8 @@ def fetch_open_meteo_weather(
     url = (
         f"https://api.open-meteo.com/v1/forecast?"
         f"latitude={lat}&longitude={lon}"
-        f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code"
-        f"&hourly=temperature_2m,relative_humidity_2m,weather_code&forecast_days=1"
+        f"&current=temperature_2m,relative_humidity_2m,wind_speed_10m,weather_code,is_day"
+        f"&hourly=temperature_2m,relative_humidity_2m,weather_code,is_day&forecast_days=1"
     )
 
     now_utc = datetime.now(timezone.utc)
@@ -70,6 +70,7 @@ def fetch_open_meteo_weather(
             hum = float(current.get("relative_humidity_2m", 62.0))
             wind = float(current.get("wind_speed_10m", 8.5))
             code = int(current.get("weather_code", 1))
+            is_day = bool(current.get("is_day", 1))
             desc = get_weather_description(code)
 
             # 1. Store latest live reading in database
@@ -82,6 +83,7 @@ def fetch_open_meteo_weather(
                 wind_speed=wind,
                 weather_code=code,
                 weather_desc=desc,
+                is_day=is_day,
                 timestamp=now_iso
             )
 
@@ -118,6 +120,7 @@ def fetch_open_meteo_weather(
                 "wind_speed": wind,
                 "weather_code": code,
                 "weather_desc": desc,
+                "is_day": is_day,
                 "is_fallback": False,
                 "is_cached": False,
                 "cached_at": now_iso,
@@ -132,6 +135,9 @@ def fetch_open_meteo_weather(
             cached_code = int(cached["weather_code"])
             cached_desc = cached["weather_desc"]
             cached_time = cached["cached_at"]
+            # Estimate day/night for local time
+            now_hour = (now_utc.hour + 5) % 24  # approx local
+            is_day = 6 <= now_hour < 19
 
             insert_outdoor_reading(
                 city=city,
@@ -142,6 +148,7 @@ def fetch_open_meteo_weather(
                 wind_speed=8.0,
                 weather_code=cached_code,
                 weather_desc=f"{cached_desc} (Cached)",
+                is_day=is_day,
                 timestamp=now_iso
             )
 
@@ -155,6 +162,7 @@ def fetch_open_meteo_weather(
                 "wind_speed": 8.0,
                 "weather_code": cached_code,
                 "weather_desc": cached_desc,
+                "is_day": is_day,
                 "is_fallback": True,
                 "is_cached": True,
                 "cached_at": cached_time,
@@ -166,6 +174,8 @@ def fetch_open_meteo_weather(
         fallback_hum = round(65.0 + random.uniform(-3.0, 3.0), 1)
         fallback_wind = round(9.0 + random.uniform(-1.0, 2.0), 1)
         fallback_code = 2
+        now_hour = (now_utc.hour + 5) % 24
+        is_day = 6 <= now_hour < 19
         fallback_desc = "Partly cloudy (Offline Cache)"
 
         insert_outdoor_reading(
@@ -177,6 +187,7 @@ def fetch_open_meteo_weather(
             wind_speed=fallback_wind,
             weather_code=fallback_code,
             weather_desc=fallback_desc,
+            is_day=is_day,
             timestamp=now_iso
         )
 
@@ -190,6 +201,7 @@ def fetch_open_meteo_weather(
             "wind_speed": fallback_wind,
             "weather_code": fallback_code,
             "weather_desc": fallback_desc,
+            "is_day": is_day,
             "is_fallback": True,
             "is_cached": True,
             "cached_at": now_iso,

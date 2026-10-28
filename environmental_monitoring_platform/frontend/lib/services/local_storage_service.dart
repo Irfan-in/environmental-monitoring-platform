@@ -131,13 +131,10 @@ class LocalStorageService {
       final content = await file.readAsString();
       final list = jsonDecode(content) as List<dynamic>;
       final date = targetDate ?? DateTime.now();
-      final now = DateTime.now();
 
       final filtered = list.where((entry) {
         final map = entry as Map<String, dynamic>;
         final ts = ChartPoint.parseTimestamp(map['timestamp']);
-        // Reject any corrupt/skewed timestamps in the future
-        if (ts.difference(now).inMinutes > 5) return false;
         return ts.year == date.year && ts.month == date.month && ts.day == date.day;
       }).map((e) {
         final map = e as Map<String, dynamic>;
